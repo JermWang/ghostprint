@@ -6,36 +6,42 @@ import { flow, txStack, curveTank, fit } from "./art.js";
 const N = (id, cx, cy, o = {}) => { const w = o.w || 60, d = o.d || 60; return { id, x: cx - w / 2, y: cy - d / 2, w, d, h: 40, ...o }; };
 
 // Main wallet → 1Click deposit → NEAR Intents → ghost wallet → Jupiter, with the fee split off at the start.
-export function ghostRoute(svg) {
+export function ghostRoute(svg, narrow = false) {
+  // on a phone the chain zigzags down the screen instead of running across it
+  const at = narrow ? { main: [0, 0], fee: [0, -120], dep: [170, 0], near: [170, 180], ghost: [360, 180], jup: [360, 350] }
+    : { main: [0, 0], fee: [0, 120], dep: [150, 0], near: [150, -160], ghost: [350, -160], jup: [350, -310] };
   flow(svg, {
-    ox: 0, oy: 0,
+    ox: 0, oy: 0, chips: narrow ? 15 : 0,
     nodes: [
-      N("main", 0, 0, { label: "MAIN", sub: "your wallet", glyph: "key", h: 44 }),
-      N("fee", 0, 120, { w: 46, d: 46, h: 26, label: "FEE", sub: "0.5%" }),
-      N("dep", 150, 0, { label: "DEPOSIT", sub: "one-time", w: 56, d: 56, h: 32 }),
-      N("near", 150, -160, { label: "NEAR INTENTS", sub: "confidential", w: 84, d: 84, h: 56, tone: "ink", glyph: "lock" }),
-      N("ghost", 350, -160, { label: "GHOST", sub: "fresh wallet", tone: "accent", glyph: "ghost", h: 46 }),
-      N("jup", 350, -310, { label: "JUPITER", sub: "swap", glyph: "route", h: 36 })
+      N("main", ...at.main, { label: "MAIN", sub: "your wallet", glyph: "key", h: 44 }),
+      N("fee", ...at.fee, { w: 46, d: 46, h: 26, label: "FEE", sub: "0.5%" }),
+      N("dep", ...at.dep, { label: "DEPOSIT", sub: "one-time", w: 56, d: 56, h: 32 }),
+      N("near", ...at.near, { label: "NEAR INTENTS", sub: "confidential", w: 84, d: 84, h: 56, tone: "ink", glyph: "lock" }),
+      N("ghost", ...at.ghost, { label: "GHOST", sub: "fresh wallet", tone: "accent", glyph: "ghost", h: 46 }),
+      N("jup", ...at.jup, { label: "JUPITER", sub: "swap", glyph: "route", h: 36 })
     ],
     links: [{ from: "main", to: "dep" }, { from: "main", to: "fee" }, { from: "dep", to: "near" }, { from: "near", to: "ghost" }, { from: "ghost", to: "jup" }],
     sequence: [[0, 1], [2], [3], [4]],
-    tags: [{ at: [262, -160, 26], text: "BRIDGE PAYS", accent: true }, { at: [75, 0, 34], text: "SOL" }]
+    tags: narrow ? [{ at: [225, 180, 10], text: "BRIDGE PAYS", accent: true }, { at: [82, 0, 14], text: "SOL" }]
+      : [{ at: [262, -160, 26], text: "BRIDGE PAYS", accent: true }, { at: [75, 0, 34], text: "SOL" }]
   });
   return fit(svg);
 }
 
 // Ghost exit: sell on Jupiter, then back to the main wallet through NEAR Intents.
-export function ghostExit(svg) {
+export function ghostExit(svg, narrow = false) {
+  const at = narrow ? { jup: [0, 0], ghost: [170, 0], near: [170, 180], main: [360, 180] }
+    : { jup: [0, 0], ghost: [150, 0], near: [150, -160], main: [350, -160] };
   flow(svg, {
-    ox: 0, oy: 0,
+    ox: 0, oy: 0, chips: narrow ? 15 : 0,
     nodes: [
-      N("jup", 0, 0, { label: "JUPITER", sub: "sell", glyph: "route", h: 36 }),
-      N("ghost", 150, 0, { label: "GHOST", sub: "holds SOL", tone: "accent", glyph: "ghost", h: 46 }),
-      N("near", 150, -160, { label: "NEAR INTENTS", sub: "confidential", w: 84, d: 84, h: 56, tone: "ink", glyph: "lock" }),
-      N("main", 350, -160, { label: "MAIN", sub: "your wallet", glyph: "key", h: 44 })
+      N("jup", ...at.jup, { label: "JUPITER", sub: "sell", glyph: "route", h: 36 }),
+      N("ghost", ...at.ghost, { label: "GHOST", sub: "holds SOL", tone: "accent", glyph: "ghost", h: 46 }),
+      N("near", ...at.near, { label: "NEAR INTENTS", sub: "confidential", w: 84, d: 84, h: 56, tone: "ink", glyph: "lock" }),
+      N("main", ...at.main, { label: "MAIN", sub: "your wallet", glyph: "key", h: 44 })
     ],
     links: [{ from: "jup", to: "ghost" }, { from: "ghost", to: "near" }, { from: "near", to: "main" }],
-    tags: [{ at: [262, -160, 26], text: "NO FEE" }]
+    tags: [narrow ? { at: [240, 180, 10], text: "NO FEE" } : { at: [262, -160, 26], text: "NO FEE" }]
   });
   return fit(svg);
 }
@@ -60,17 +66,19 @@ export function walletTree(svg) {
 }
 
 // Everything the browser talks to. No Ghostprint server sits in the middle unless you deploy the proxy.
-export function overview(svg) {
+export function overview(svg, narrow = false) {
+  // on a phone the spokes pull in and the names float above the boxes in bigger type
+  const r = narrow ? 150 : 190;
   flow(svg, {
-    ox: 0, oy: 0,
+    ox: 0, oy: 0, chips: narrow ? 17 : 0,
     nodes: [
       N("you", 0, 0, { label: "YOUR BROWSER", sub: "keys + signing", w: 92, d: 92, h: 58, tone: "ink", glyph: "ghost" }),
-      N("rpc", 190, 0, { label: "SOLANA RPC", sub: "chain reads", h: 38 }),
-      N("jup", -190, 0, { label: "JUPITER", sub: "routes, prices", glyph: "route", h: 38 }),
-      N("near", 0, 190, { label: "NEAR 1CLICK", sub: "ghost routes", glyph: "lock", h: 38 }),
-      N("pump", 0, -190, { label: "PUMPPORTAL", sub: "new launches", glyph: "flame", h: 38 }),
-      N("jito", 190, -190, { label: "JITO", sub: "MEV-protect", glyph: "shield", h: 34 }),
-      N("dex", -190, 190, { label: "DEXSCREENER", sub: "charts", glyph: "chart", h: 34 })
+      N("rpc", r, 0, { label: "SOLANA RPC", sub: "chain reads", h: 38 }),
+      N("jup", -r, 0, { label: "JUPITER", sub: "routes, prices", glyph: "route", h: 38 }),
+      N("near", 0, r, { label: "NEAR 1CLICK", sub: "ghost routes", glyph: "lock", h: 38 }),
+      N("pump", 0, -r, { label: "PUMPPORTAL", sub: "new launches", glyph: "flame", h: 38 }),
+      N("jito", r, -r, { label: "JITO", sub: "MEV-protect", glyph: "shield", h: 34 }),
+      N("dex", -r, r, { label: "DEXSCREENER", sub: "charts", glyph: "chart", h: 34 })
     ],
     links: [{ from: "you", to: "rpc" }, { from: "you", to: "jup" }, { from: "you", to: "near", bend: "yx" }, { from: "you", to: "pump", bend: "yx" }, { from: "you", to: "jito" }, { from: "you", to: "dex", bend: "yx" }],
     sequence: [[0, 3], [1, 4], [2, 5]]
@@ -167,7 +175,28 @@ export function bondingCurve(svg) {
 
 export const DIAGRAMS = { ghostRoute, ghostExit, walletTree, overview, proxy, pulseSources, limitOrder, autopilot, tradeTx, bondingCurve };
 
-// Draw every <svg data-diagram="name"> in root.
+// Diagrams with a phone layout, and the width below which their drawing area switches to it.
+const NARROW = new Set(["ghostRoute", "ghostExit", "overview"]), NARROW_PX = 560;
+const isNarrow = svg => NARROW.has(svg.dataset.diagram) && (svg.parentElement?.clientWidth || Infinity) < NARROW_PX;
+function draw(svg) {
+  const narrow = isNarrow(svg);
+  svg.toggleAttribute("data-narrow", narrow);
+  DIAGRAMS[svg.dataset.diagram](svg, narrow);
+}
+
+// Draw every <svg data-diagram="name"> in root, and redraw the ones with a phone layout when their
+// width crosses over. A redraw swaps in a fresh <svg> so the old drawing's animation stops with it.
 export function renderDiagrams(root = document) {
-  root.querySelectorAll("svg[data-diagram]").forEach(svg => { const f = DIAGRAMS[svg.dataset.diagram]; if (f && !svg.childNodes.length) f(svg); });
+  const live = [...root.querySelectorAll("svg[data-diagram]")].filter(svg => DIAGRAMS[svg.dataset.diagram] && !svg.childNodes.length);
+  live.forEach(draw);
+  const flip = live.filter(svg => NARROW.has(svg.dataset.diagram));
+  if (!flip.length || typeof ResizeObserver !== "function") return;
+  const ro = new ResizeObserver(() => flip.forEach((svg, i) => {
+    if (isNarrow(svg) === svg.hasAttribute("data-narrow")) return;
+    const fresh = svg.cloneNode(false);
+    svg.replaceWith(fresh);
+    flip[i] = fresh;
+    draw(fresh);
+  }));
+  flip.forEach(svg => ro.observe(svg.parentElement));
 }

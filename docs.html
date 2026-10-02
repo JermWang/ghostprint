@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="How Ghostprint works: wallets, Jupiter routing, the 0.5% fee, Ghost mode on NEAR Intents, Pulse data, orders, Exposure and the proxy.">
 <title>Ghostprint Docs</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
@@ -82,6 +85,7 @@ b{color:var(--ink)}
 .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:14px;margin:18px 0}
 .figs .fig{margin:0}
 .figs .fig svg,.hero .fig svg{min-width:0}
+.fig svg[data-narrow]{min-width:0;max-width:440px}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin:16px 0}
 .card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);padding:16px;min-width:0}
@@ -116,6 +120,20 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--face-l);ver
 th{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);background:var(--ground);font-weight:500}
 tr:last-child td{border-bottom:0}
 td code{white-space:nowrap}
+/* phones: tables lose their minimum width; wide ones turn each row into a card, every cell labelled
+   with its column (docs.js copies the header in and marks them .stack) */
+@media (max-width:600px){
+  .tbl table{min-width:0}
+  .tbl .stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .tbl .stack tr{display:block;padding:8px 0;border-bottom:1px solid var(--face-l)}
+  .tbl .stack tr:last-child{border-bottom:0}
+  .tbl .stack td{display:grid;grid-template-columns:minmax(84px,38%) minmax(0,1fr);gap:10px;padding:4px 12px;border:0}
+  .tbl .stack td::before{content:attr(data-th);font-family:var(--font-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding-top:3px}
+  .tbl .stack td:first-child{grid-template-columns:minmax(0,1fr)}
+  .tbl .stack td:first-child::before{display:none}
+  td code{white-space:normal}
+}
+}
 
 kbd{font-family:var(--font-mono);font-size:.78rem;background:var(--ink);color:var(--paper);border-radius:5px;padding:2px 7px;box-shadow:0 2px 0 var(--ink-3)}
 .addr{font-family:var(--font-mono);font-size:.8rem;background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:6px;overflow-wrap:anywhere;text-decoration:none}

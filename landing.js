@@ -1,13 +1,12 @@
 // Landing page: the code-drawn art (art.js) and the read-only Exposure tracer.
 import { trace, isAddress, short, DEFAULT_RPC } from "./trace.js";
 import { C, REDUCE, renderPixels, renderIcons, machine } from "./art.js";
-import { ghostRoute } from "./diagrams.js";
+import { renderDiagrams } from "./diagrams.js";
 
 renderPixels(document);
 renderIcons(document);
 machine(document.getElementById("machine"));
-const route = document.getElementById("ghost-route");
-if (route) { ghostRoute(route); const a = route.parentElement; if (a.scrollWidth > a.clientWidth) a.scrollLeft = (a.scrollWidth - a.clientWidth) / 2; }
+renderDiagrams(document);
 
 /* ---------- Exposure tracer ---------- */
 const INK3 = C.INK3, PAPER = C.PAPER, ACCENT = C.ACCENT, MUTE_INK = C.MUTE;
