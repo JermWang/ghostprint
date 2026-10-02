@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="How Ghostprint works: wallets, Jupiter routing, the 0.5% fee, Ghost mode on NEAR Intents, Pulse data, orders, Exposure and the proxy.">
+<title>Ghostprint Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Same workbench as the landing page: light-grey ground, ink panels, paper cards, one infrared accent.
+   Every figure is a live isometric drawing from diagrams.js. */
+:root{
+  --ground:#D6D8D9;--paper:#EEEFEE;--ink:#1D1F22;--ink-2:#26292D;--ink-3:#31353A;
+  --mute:#5F646B;--mute-ink:#9A9EA5;--accent:#FF5A24;--face-l:#C6C9CB;--face-r:#AFB3B6;
+  --font-display:"Sora","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:12px;color-scheme:light;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:90px}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-display);font-size:16px;line-height:1.6;padding-inline:clamp(16px,3vw,32px);padding-block:12px 48px;overflow-x:hidden}
+.wrap{max-width:1180px;margin-inline:auto}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 12px;border:1.5px solid var(--ink);border-radius:14px;background:color-mix(in srgb,var(--ground) 84%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand .ghost{width:28px;height:28px;display:block}
+.brand .word{height:18px;width:auto;display:block}
+.brand .tag{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;border:1.5px solid var(--ink);border-radius:6px;padding:2px 6px}
+.nav-links{display:flex;gap:4px;align-items:center}
+.nav-links a{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;padding:8px 12px;border-radius:9px;white-space:nowrap}
+.nav-links a:hover{background:var(--paper)}
+.nav-links a.cta{background:var(--ink);color:var(--paper)}
+.nav-links a.cta:hover{background:var(--ink-3)}
+@media (max-width:600px){.nav-links a:not(.cta){display:none}.brand .word{display:none}}
+
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:28px;align-items:center;padding-block:40px 24px}
+h1{font-size:clamp(2.3rem,5vw,3.9rem);line-height:1.02;letter-spacing:-.035em;margin:0 0 16px;font-weight:700;text-wrap:balance}
+.kicker{font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em;font-size:clamp(.8rem,1.2vw,.92rem);line-height:1.65;margin:0;max-width:44ch}
+@media (max-width:920px){.hero{grid-template-columns:minmax(0,1fr)}}
+
+.layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:36px;align-items:start;padding-top:12px}
+.toc{position:sticky;top:96px;display:flex;flex-direction:column;gap:2px;font-family:var(--font-mono);font-size:.74rem}
+.toc .cap{font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 8px 10px}
+.toc a{text-decoration:none;padding:7px 10px;border-radius:8px;color:var(--mute);border:1.5px solid transparent;white-space:nowrap}
+.toc a:hover{color:var(--ink);background:var(--paper)}
+.toc a[aria-current]{color:var(--ink);border-color:var(--ink);background:var(--paper)}
+.toc a[aria-current]::before{content:"";display:inline-block;width:7px;height:7px;background:var(--accent);margin-right:8px;vertical-align:1px}
+@media (max-width:900px){
+  .layout{grid-template-columns:minmax(0,1fr);gap:8px}
+  .toc{top:calc(env(safe-area-inset-top,0px) + 74px);z-index:5;flex-direction:row;overflow-x:auto;scrollbar-width:none;background:color-mix(in srgb,var(--ground) 90%,transparent);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);padding:6px 0;margin-inline:-4px}
+  .toc::-webkit-scrollbar{display:none}
+  .toc .cap{display:none}
+}
+
+article{min-width:0}
+article section{padding-block:30px 26px;border-top:1.5px solid var(--ink)}
+article section:first-child{border-top:0;padding-top:0}
+.eyebrow{font-family:var(--font-mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.eyebrow svg{width:18px;height:18px;display:block;color:var(--ink)}
+h2{font-size:clamp(1.6rem,3.4vw,2.4rem);line-height:1.06;letter-spacing:-.03em;margin:0 0 14px;text-wrap:balance}
+h3{font-size:1.06rem;margin:26px 0 8px;letter-spacing:-.01em}
+p{margin:0 0 12px;max-width:72ch}
+article p, article li{color:#34383d}
+ul.list,ol.list{margin:0 0 14px;padding-left:1.2em;max-width:72ch}
+ul.list li,ol.list li{margin-bottom:6px}
+code,.mono{font-family:var(--font-mono);font-size:.84em}
+code{background:var(--paper);border:1px solid var(--face-l);border-radius:5px;padding:1px 5px;overflow-wrap:anywhere}
+b{color:var(--ink)}
+
+.fig{margin:18px 0 20px;border:1.5px solid var(--ink);border-radius:var(--r);background:var(--ground);overflow:hidden}
+.fig .art{overflow-x:auto;overscroll-behavior-x:contain;padding:10px 6px 4px;background:
+  radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ink) 16%,transparent) 1px,transparent 1.4px) 0 0/14px 14px}
+.fig svg{display:block;width:100%;height:auto;min-width:560px;margin-inline:auto}
+.fig.narrow svg{max-width:400px;min-width:280px}
+.fig.mid svg{max-width:640px;min-width:420px}
+.fig figcaption{border-top:1.5px solid var(--ink);background:var(--paper);padding:10px 14px;font-family:var(--font-mono);font-size:.72rem;line-height:1.55;color:var(--mute)}
+.fig figcaption b{color:var(--ink);font-weight:700}
+.figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:14px;margin:18px 0}
+.figs .fig{margin:0}
+.figs .fig svg,.hero .fig svg{min-width:0}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin:16px 0}
+.card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);padding:16px;min-width:0}
+.card .gl{width:24px;height:24px;display:block;margin-bottom:8px}
+.card h4{margin:0 0 6px;font-size:.98rem}
+.card p{margin:0;font-size:.88rem;color:var(--mute)}
+.card.ink{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.card.ink h4{color:var(--paper)}
+.card.ink p{color:var(--mute-ink)}
+.card.ink .gl{color:var(--accent)}
+
+.icons{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:12px;margin:16px 0}
+.icon-card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);overflow:hidden}
+.icon-card .art svg{display:block;width:100%;height:auto;background:var(--ground);border-bottom:1.5px solid var(--ink)}
+.icon-card div.t{padding:10px 12px;font-size:.86rem}
+.icon-card div.t b{display:block;margin-bottom:2px}
+.icon-card div.t span{color:var(--mute);font-size:.82rem}
+
+.note{border-left:4px solid var(--accent);background:var(--paper);border-radius:0 10px 10px 0;padding:12px 16px;margin:16px 0;max-width:76ch;font-size:.92rem}
+.note p:last-child{margin:0}
+.note.ink{background:var(--ink);color:var(--paper);border-left-color:var(--accent)}
+.note.ink p,.note.ink li{color:var(--mute-ink)}
+.note.ink b{color:var(--paper)}
+
+.steps{counter-reset:s;list-style:none;padding:0;margin:14px 0 18px;display:grid;gap:8px;max-width:76ch}
+.steps li{counter-increment:s;display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;align-items:start;background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;padding:10px 12px;font-size:.92rem}
+.steps li::before{content:counter(s,decimal-leading-zero);font-family:var(--font-mono);font-weight:700;font-size:.78rem;background:var(--ink);color:var(--paper);border-radius:6px;text-align:center;padding:3px 0}
+
+.tbl{overflow-x:auto;margin:14px 0 18px;border:1.5px solid var(--ink);border-radius:var(--r);background:var(--paper)}
+table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:520px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--face-l);vertical-align:top}
+th{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);background:var(--ground);font-weight:500}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+kbd{font-family:var(--font-mono);font-size:.78rem;background:var(--ink);color:var(--paper);border-radius:5px;padding:2px 7px;box-shadow:0 2px 0 var(--ink-3)}
+.addr{font-family:var(--font-mono);font-size:.8rem;background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:6px;overflow-wrap:anywhere;text-decoration:none}
+.addr:hover{color:var(--accent)}
+
+details.faq{background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;margin:8px 0;max-width:76ch}
+details.faq summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:.95rem;list-style:none;display:flex;justify-content:space-between;gap:12px}
+details.faq summary::-webkit-details-marker{display:none}
+details.faq summary::after{content:"+";font-family:var(--font-mono);color:var(--accent);font-weight:700}
+details.faq[open] summary::after{content:"−"}
+details.faq div{padding:0 14px 12px;font-size:.9rem}
+details.faq div p:last-child{margin:0}
+
+footer{border-top:1.5px solid var(--ink);margin-top:24px;padding-top:28px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:end}
+footer .big{font-size:clamp(1.3rem,3vw,2rem);font-weight:700;letter-spacing:-.025em;line-height:1.12;margin:0}
+footer .small{margin:0;font-size:.82rem;color:var(--mute)}
+footer .word{height:14px;width:auto;margin-top:14px;display:block}
+@media (max-width:760px){footer{grid-template-columns:minmax(0,1fr)}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.toc a{transition:none}}
+</style>
+<script type="module" src="./docs.js"></script>
+</head>
+<body>
+<div class="wrap">
+  <header class="nav">
+    <a class="brand" href="./" aria-label="Ghostprint home"><span data-pixel="ghost" class="ghost"></span><span data-pixel="word" class="word"></span><span class="tag">Docs</span></a>
+    <nav class="nav-links" aria-label="Site">
+      <a href="./">Home</a>
+      <a href="./#trace">Exposure</a>
+      <a class="cta" href="./app.html">Launch terminal</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <h1>How Ghostprint works.</h1>
+      <p class="kicker">Every wallet, route, fee and data source in the terminal, drawn as it runs. These are the paths your SOL actually takes.</p>
+    </div>
+    <figure class="fig" style="margin:0">
+      <div class="art"><svg data-diagram="overview" role="img" aria-label="Your browser at the centre, connected to Solana RPC, Jupiter, NEAR 1Click, PumpPortal, Jito and DexScreener"></svg></div>
+      <figcaption><b>Your browser is the app.</b> It talks to each service directly. There is no Ghostprint server holding funds, keys or orders.</figcaption>
+    </figure>
+  </div>
+
+  <div class="layout">
+    <nav class="toc" aria-label="Contents">
+      <p class="cap">Contents</p>
+      <a href="#overview">Overview</a>
+      <a href="#wallets">Wallets</a>
+      <a href="#trading">Trading</a>
+      <a href="#fees">Fees</a>
+      <a href="#ghost">Ghost mode</a>
+      <a href="#pulse">Pulse data</a>
+      <a href="#orders">Orders</a>
+      <a href="#tracker">Tracker &amp; PnL</a>
+      <a href="#exposure">Exposure</a>
+      <a href="#proxy">Infrastructure</a>
+      <a href="#token">Token</a>
+      <a href="#security">Security</a>
+      <a href="#keys">Shortcuts</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+
+    <article>
+      <section id="overview">
+        <p class="eyebrow"><span data-pixel="ghost"></span>Overview</p>
+        <h2>A trench terminal that leaves fewer tracks.</h2>
+        <p>Ghostprint is a Solana trading terminal that runs entirely in your browser. It does what fast terminals do: a live board of new pump.fun launches, one-click buys, token pages with live trades and holders, wallet tracking, limit orders and PnL. On top of that it gives you two things the others don't: <b>Ghost mode</b>, which buys from fresh wallets funded privately through NEAR Intents, and <b>Exposure</b>, which shows what wallet trackers can already link to you.</p>
+        <div class="cards">
+          <div class="card"><span data-pixel="key" class="gl"></span><h4>Non-custodial</h4><p>You sign every trade, in your wallet or in wallets derived from your own signature. Ghostprint never holds funds.</p></div>
+          <div class="card"><span data-pixel="route" class="gl"></span><h4>Best-price routing</h4><p>Every swap is routed by Jupiter across Solana's DEXs and pump.fun curves.</p></div>
+          <div class="card"><span data-pixel="lock" class="gl"></span><h4>Private funding</h4><p>Ghost wallets are paid by NEAR's bridge, not by you, so nothing on-chain points back.</p></div>
+          <div class="card ink"><span data-pixel="shield" class="gl"></span><h4>Static and open</h4><p>The app is plain files: HTML and JavaScript you can read, host or run locally.</p></div>
+        </div>
+      </section>
+
+      <section id="wallets">
+        <p class="eyebrow"><span data-pixel="key"></span>Wallets</p>
+        <h2>One signature, every wallet.</h2>
+        <p>You connect a normal Solana wallet (Phantom, Solflare, Backpack and others). That is your <b>main wallet</b>. When you first use the instant wallet or Ghost mode, the terminal asks it to sign one fixed message. The signature never leaves your browser and is never stored. From it, the terminal derives:</p>
+        <figure class="fig">
+          <div class="art"><svg data-diagram="walletTree" role="img" aria-label="Main wallet signs once; the signature feeds SHA-256 with a path to make the instant wallet and ghost wallets 0, 1 and 2"></svg></div>
+          <figcaption><b>Derivation.</b> Each wallet's seed is <code>SHA-256(signature ‖ path)</code>: <code>ghostprint/instant/0</code> for the instant wallet, <code>ghostprint/ghost/0</code>, <code>/1</code>, <code>/2</code>… for ghosts.</figcaption>
+        </figure>
+        <div class="tbl"><table>
+          <thead><tr><th>Wallet</th><th>Signs with</th><th>Use it for</th></tr></thead>
+          <tbody>
+            <tr><td><b>Main</b></td><td>Your wallet app, with a popup per trade</td><td>Holding funds, funding the others, careful trades</td></tr>
+            <tr><td><b>Instant</b></td><td>A key in this tab's memory, no popups</td><td>⚡ buys, presets, autopilot and snipes. Fund it directly or privately.</td></tr>
+            <tr><td><b>Ghost</b></td><td>A fresh key per Ghost buy</td><td>Buys with no on-chain link to your main wallet</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Recovery</h3>
+        <p>Solana signatures are deterministic: the same wallet signing the same message always produces the same signature. Sign again on any device and you get the same instant and ghost wallets back. Nothing secret needs to be backed up beyond your main wallet.</p>
+        <p>The terminal stores a short fingerprint of the signature (8 bytes of its hash, which reveals nothing). If your wallet ever signs differently, for example a different wallet app that signs messages another way, the terminal stops instead of opening a different set of wallets.</p>
+        <p>Every derived wallet has an <b>Export key</b> button, so you can import it into any Solana wallet.</p>
+        <div class="note"><p><b>Only sign the Ghostprint message on Ghostprint.</b> Anyone holding that signature can rebuild your instant and ghost wallets. The message says so in plain words. Some hardware-wallet setups can't sign messages; with those, instant and Ghost mode are unavailable and you trade from the main wallet.</p></div>
+      </section>
+
+      <section id="trading">
+        <p class="eyebrow"><span data-pixel="route"></span>Trading</p>
+        <h2>From click to confirmed.</h2>
+        <ol class="steps">
+          <li><span>The terminal asks Jupiter for a quote: your amount, slippage from the active preset, routes limited so the transaction has room for the fee.</span></li>
+          <li><span>It fetches Jupiter's swap instructions, not a finished transaction, and assembles the transaction itself: compute budget, the fee transfer, the swap, cleanup.</span></li>
+          <li><span>You sign. Main-wallet trades open a popup; instant and ghost trades sign in the tab.</span></li>
+          <li><span>It sends the transaction, rebroadcasts it every 2 seconds until it lands or its blockhash expires, and reports the result.</span></li>
+        </ol>
+        <figure class="fig narrow">
+          <div class="art"><svg data-diagram="tradeTx" role="img" aria-label="A buy transaction stacked bottom to top: compute budget, Ghostprint fee, token account, Jupiter swap, cleanup, Jito tip"></svg></div>
+          <figcaption><b>One buy, one transaction.</b> Every layer lands together or none do: if the swap fails, the fee is not taken.</figcaption>
+        </figure>
+        <h3>Presets</h3>
+        <p>Three presets set slippage, priority and Jito. Switch with <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> on a token page; edit them in Settings.</p>
+        <div class="tbl"><table>
+          <thead><tr><th>Preset</th><th>Slippage</th><th>Priority fee</th><th>Jito tip</th><th>MEV-protect</th></tr></thead>
+          <tbody>
+            <tr><td><b>P1</b></td><td>3%</td><td>High, up to 0.001 SOL</td><td>none</td><td>off</td></tr>
+            <tr><td><b>P2</b></td><td>10%</td><td>Very high, up to 0.003 SOL</td><td>0.0005 SOL</td><td>off</td></tr>
+            <tr><td><b>P3</b></td><td>20%</td><td>Very high, up to 0.01 SOL</td><td>0.001 SOL</td><td>on</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Jito and MEV-protect</h3>
+        <p>With a tip set, the transaction pays it to one of Jito's tip accounts and is also sent to Jito's block engine, which helps it land in busy blocks. With <b>MEV-protect</b> on, the terminal simulates the transaction first and sends it <i>only</i> to Jito, never to a public RPC node, which keeps it away from sandwich bots watching the network.</p>
+      </section>
+
+      <section id="fees">
+        <p class="eyebrow"><span data-pixel="fuel"></span>Fees</p>
+        <h2><span data-cfg="fee">0.5%</span>, in SOL, in the open.</h2>
+        <p>Every terminal trade pays a <b data-cfg="fee">0.5%</b> fee in SOL, inside the same transaction as the swap. You see it in the trade panel and in your wallet's preview before you sign.</p>
+        <ul class="list">
+          <li><b>Buys:</b> <span data-cfg="fee">0.5%</span> of the SOL you spend, transferred before the swap.</li>
+          <li><b>Sells:</b> <span data-cfg="fee">0.5%</span> of the <i>minimum</i> SOL the route guarantees, transferred after the swap, so a fill better than the minimum is all yours.</li>
+          <li><b>Ghost buys:</b> the fee is paid by your main wallet when it funds the route. Ghost wallets never pay Ghostprint, so no fee transfer marks them.</li>
+          <li><b>Not charged:</b> ghost exits, deposits to and withdrawals from your instant wallet, and limit orders (Jupiter fills those).</li>
+        </ul>
+        <p>Fees go to the treasury: <a class="addr" id="treasury-link" href="#" target="_blank" rel="noopener" data-cfg="treasury">DGorZp9ari8RGGdiQbXCsQ62HDmkxSL66xxQcYvWfWMP</a></p>
+        <p>Network costs are separate and go to Solana validators: the base fee, the priority fee from your preset, and a Jito tip if set. Jupiter's routing is free.</p>
+      </section>
+
+      <section id="ghost">
+        <p class="eyebrow"><span data-pixel="lock"></span>Ghost mode · NEAR Intents</p>
+        <h2>The bridge pays your ghost. You never do.</h2>
+        <p>Trackers link wallets by following SOL: whoever funds a wallet is assumed to own it. Ghost mode breaks that link by never sending SOL from your wallet to the ghost. Instead it uses <b>NEAR Intents</b>, a cross-chain settlement network where independent solvers fill requests. Through its 1Click API, you pay into a one-time deposit address, and NEAR's Solana bridge pays the ghost out of its own wallets.</p>
+        <figure class="fig">
+          <div class="art"><svg data-diagram="ghostRoute" role="img" aria-label="Main wallet sends SOL to a one-time deposit address and the fee to the treasury; NEAR Intents routes it confidentially; the bridge pays a fresh ghost wallet, which swaps on Jupiter"></svg></div>
+          <figcaption><b>A ghost buy.</b> Your main wallet's transaction ends at a deposit address shared with many other users. The ghost's SOL arrives from the bridge.</figcaption>
+        </figure>
+        <ol class="steps">
+          <li><span>The terminal derives the next unused ghost wallet from your signature.</span></li>
+          <li><span>It asks 1Click for a SOL → SOL route to the ghost, with <b>Confidential Intents</b> on: the sender, amount and route stay off NEAR's public record. If a route can't be confidential, it falls back to a standard intent and tells you.</span></li>
+          <li><span>It checks the quote before sending anything: the recipient must be the ghost, refunds must go to your wallet, the amount and assets must match, and the deposit address must not be one of yours. Otherwise it refuses.</span></li>
+          <li><span>You sign one transaction: SOL to the deposit address, plus the <span data-cfg="fee">0.5%</span> fee.</span></li>
+          <li><span>NEAR Intents settles and the bridge pays the ghost, usually within a minute or two. The terminal follows the route's status.</span></li>
+          <li><span>The ghost buys on Jupiter, keeping 0.01 SOL for network fees and token-account rent.</span></li>
+        </ol>
+        <h3>Exiting</h3>
+        <figure class="fig mid">
+          <div class="art"><svg data-diagram="ghostExit" role="img" aria-label="The ghost sells on Jupiter, then sends its SOL through NEAR Intents back to the main wallet"></svg></div>
+          <figcaption><b>Exit.</b> The ghost sells, closes its empty token accounts to recover their rent, and routes all of its SOL back through NEAR Intents.</figcaption>
+        </figure>
+        <h3>What it costs</h3>
+        <p>The Ghostprint fee, Solana network fees, and NEAR Intents' route fee. Without a partner key, 1Click charges about 0.1–0.2% per route; with a key held by the proxy that fee goes away. Ghost buys are capped at <b data-cfg="ghostMax">5 SOL</b> while Ghost mode is in beta.</p>
+        <h3>If something goes wrong</h3>
+        <p>A route that can't complete is refunded by NEAR Intents to the wallet that sent it. Ghost wallets can always be rebuilt by signing again, and Portfolio lists every ghost with funds, with buttons to exit or export its key, so nothing is stranded.</p>
+        <div class="note ink">
+          <p><b>What Ghost mode does not do.</b> Nothing makes a wallet untraceable. An observer who sees 1.000 SOL leave your wallet and 0.998 SOL reach a fresh wallet a minute later can guess. Vary amounts, don't buy the instant the ghost is funded, and don't send funds between ghosts and wallets you've used publicly. Ghost mode makes tracing expensive and uncertain; it doesn't make it impossible. Ghostprint doesn't run a mixer and never touches the funds in transit.</p>
+        </div>
+        <h3>Why NEAR Intents</h3>
+        <p>It settles quickly, needs no wallet or account on NEAR, pays out from bridge-owned addresses used by everyone, and offers Confidential Intents for keeping the request itself private. Monero would need a swap in and out through third-party exchanges, slower and with more counterparties.</p>
+      </section>
+
+      <section id="pulse">
+        <p class="eyebrow"><span data-pixel="flame"></span>Pulse data</p>
+        <h2>Where the board comes from.</h2>
+        <p>Pulse is three live columns: <b>New pairs</b>, <b>Final stretch</b> (tokens past 60% of their bonding curve, adjustable) and <b>Migrated</b>. Each token is merged from several sources by its mint address.</p>
+        <div class="figs">
+          <figure class="fig">
+            <div class="art"><svg data-diagram="pulseSources" role="img" aria-label="PumpPortal, Solana RPC and Jupiter feed the Pulse board"></svg></div>
+            <figcaption><b>Sources.</b> PumpPortal streams launches and migrations over a websocket; the RPC reads bonding curves; Jupiter fills in older tokens and stats.</figcaption>
+          </figure>
+          <figure class="fig">
+            <div class="art"><svg data-diagram="bondingCurve" role="img" aria-label="A bonding curve tank fills to 100 percent, then its liquidity flows to an AMM pool"></svg></div>
+            <figcaption><b>Curve progress</b> is read from the token's pump.fun curve account on-chain: how much of the 793.1M sellable supply is gone. At 100% it migrates to an AMM pool.</figcaption>
+          </figure>
+        </div>
+        <ul class="list">
+          <li><b>Live trades</b> on a token page come from the chain: pump.fun trades are decoded straight from program logs, other DEX trades from the transaction's balance changes.</li>
+          <li><b>Holders</b> come from the token's largest accounts, with the bonding curve and the dev wallet labelled, plus mint and freeze authority.</li>
+          <li><b>Charts</b> are DexScreener's. <b>Metadata</b> (image, socials) comes from the token's own metadata URI.</li>
+          <li>Hover a column to pause it while you read. Filters by market cap, name and socials apply live.</li>
+        </ul>
+      </section>
+
+      <section id="orders">
+        <p class="eyebrow"><span data-pixel="target"></span>Orders</p>
+        <h2>Orders that run without you, and orders that run with you.</h2>
+        <div class="figs">
+          <figure class="fig">
+            <div class="art"><svg data-diagram="limitOrder" role="img" aria-label="You sign once; Jupiter Trigger keepers hold the order and fill it at your price, paying your wallet"></svg></div>
+            <figcaption><b>Limit orders</b> go to Jupiter's Trigger program. Your tokens or SOL sit in an on-chain escrow until the price hits, then keepers fill it, even with the terminal closed. Cancel any time from Portfolio.</figcaption>
+          </figure>
+          <figure class="fig">
+            <div class="art"><svg data-diagram="autopilot" role="img" aria-label="This tab checks prices every 4 seconds and sells from the instant wallet through Jupiter"></svg></div>
+            <figcaption><b>Autopilot</b> (take profit, stop loss, trailing stop) runs in this tab. It checks prices every 4 seconds and sells from the instant wallet, so it only works while the terminal is open and unlocked.</figcaption>
+          </figure>
+        </div>
+        <h3>Migration sniper</h3>
+        <p>Tap 🎯 on a Pulse card to arm a snipe. When PumpPortal reports that token's migration, the instant wallet buys right away, and can set take-profit and stop-loss rules for the new position (Settings → After a snipe). Like autopilot, it needs the tab open.</p>
+        <p>The 🤖 chip in the top bar counts armed rules and snipes. Portfolio → Orders lists all of them.</p>
+      </section>
+
+      <section id="tracker">
+        <p class="eyebrow"><span data-pixel="stack"></span>Tracker &amp; PnL</p>
+        <h2>Follow wallets. Keep score.</h2>
+        <p><b>Tracker</b> watches any wallets you add and lists their swaps as they happen, read from the chain. ⚡ on a row buys the same token with your quick-buy amount, from whichever wallet you trade from (main or instant).</p>
+        <p><b>Portfolio</b> shows each wallet's positions with average cost and realized and unrealized PnL, priced in SOL. It counts trades made in the terminal; <b>Import on-chain history</b> reads up to 100 earlier transactions per page so trades made elsewhere count too. Everything is stored in this browser only.</p>
+      </section>
+
+      <section id="exposure">
+        <p class="eyebrow"><span data-pixel="clock"></span>Exposure</p>
+        <h2>What trackers already know.</h2>
+        <p>Exposure reads any wallet's public history and scores how linkable it is, 0 to 100, the way commercial trackers score it. It's read-only: nothing to connect or sign, and your browser queries the RPC node directly.</p>
+        <div class="icons">
+          <div class="icon-card"><div class="art" data-icon="funding"></div><div class="t"><b>Funding</b><span>Who sent the first SOL, and which other wallets they funded.</span></div></div>
+          <div class="icon-card"><div class="art" data-icon="serial"></div><div class="t"><b>Identity</b><span>Deposits to or withdrawals from known exchange wallets.</span></div></div>
+          <div class="icon-card"><div class="art" data-icon="linked"></div><div class="t"><b>Linked wallets</b><span>Wallets you move funds back and forth with.</span></div></div>
+          <div class="icon-card"><div class="art" data-icon="clock"></div><div class="t"><b>Habits</b><span>Signing hours that place you in a time zone.</span></div></div>
+        </div>
+        <p>It reads up to 100 recent transactions, the earliest ones it can reach, and one hop out to the funder and the most-linked wallets. It also flags address-poisoning attempts. Scores: <b>Low</b> under 25, <b>Moderate</b> 25–49, <b>High</b> 50–74, <b>Exposed</b> 75 and up.</p>
+        <p><a href="./#trace">Run Exposure on the home page →</a></p>
+      </section>
+
+      <section id="proxy">
+        <p class="eyebrow"><span data-pixel="bolt"></span>Infrastructure</p>
+        <h2>Keys stay off the page.</h2>
+        <p>Anything in a static site is public, so API keys can't live in it. By default each browser calls free public endpoints from its own IP. For scale, Ghostprint ships a small Cloudflare Worker (<code>worker/</code>) that holds the keys and forwards requests:</p>
+        <figure class="fig">
+          <div class="art"><svg data-diagram="proxy" role="img" aria-label="The browser calls one worker, which adds API keys and forwards to RPC, Jupiter, 1Click and X"></svg></div>
+          <figcaption><b>The proxy</b> adds a private RPC URL, the Jupiter key, the NEAR Intents partner key and an X token. It only forwards: it never sees a private key or signs anything.</figcaption>
+        </figure>
+        <p>Set <code>PROXY_URL</code> in <code>config.js</code> to turn it on. You can also paste your own RPC URL (Helius, Triton, QuickNode) in Settings for faster reads.</p>
+      </section>
+
+      <section id="token">
+        <p class="eyebrow"><span data-pixel="stairs"></span>Token</p>
+        <h2>Utility tied to fees. Not live yet.</h2>
+        <p>The token isn't launched and nothing on this page is an offer. The planned uses all run on the fee the terminal already earns in SOL:</p>
+        <div class="cards">
+          <div class="card"><span data-pixel="stairs" class="gl"></span><h4>Fee tiers</h4><p>Hold more, pay less than the 0.5% base fee.</p></div>
+          <div class="card"><span data-pixel="flame" class="gl"></span><h4>Buybacks</h4><p>A share of SOL fees buys the token back.</p></div>
+          <div class="card"><span data-pixel="ghost" class="gl"></span><h4>Ghost limits</h4><p>Holders get higher Ghost mode limits per buy.</p></div>
+          <div class="card"><span data-pixel="link" class="gl"></span><h4>Referrals</h4><p>A cut of referred traders' fees, paid in the token.</p></div>
+        </div>
+      </section>
+
+      <section id="security">
+        <p class="eyebrow"><span data-pixel="shield"></span>Security</p>
+        <h2>What lives where.</h2>
+        <div class="tbl"><table>
+          <thead><tr><th>Thing</th><th>Where it is</th></tr></thead>
+          <tbody>
+            <tr><td>Main wallet keys</td><td>Your wallet app. Never seen by the terminal.</td></tr>
+            <tr><td>Ghostprint signature, instant and ghost keys</td><td>This tab's memory only. Gone when you close or lock it; rebuilt by signing again.</td></tr>
+            <tr><td>Settings, watchlist, tracked wallets, trade log, rules</td><td>This browser's local storage. Never uploaded.</td></tr>
+            <tr><td>Limit orders</td><td>On-chain, in Jupiter's Trigger program, under your wallet.</td></tr>
+            <tr><td>Ghost routes in transit</td><td>NEAR Intents, refundable to the sender.</td></tr>
+          </tbody>
+        </table></div>
+        <ul class="list">
+          <li>Check the transaction preview in your wallet. A Ghostprint buy shows the swap and one fee transfer to the treasury above, nothing else.</li>
+          <li>Keep the instant wallet to trading money. Its key sits in an open browser tab.</li>
+          <li>Bookmark the site. Never sign the Ghostprint message anywhere else.</li>
+        </ul>
+      </section>
+
+      <section id="keys">
+        <p class="eyebrow"><span data-pixel="bolt"></span>Shortcuts</p>
+        <h2>Keyboard.</h2>
+        <div class="tbl"><table>
+          <thead><tr><th>Key</th><th>Does</th></tr></thead>
+          <tbody>
+            <tr><td><kbd>/</kbd></td><td>Search tokens by name, ticker or mint</td></tr>
+            <tr><td><kbd>P</kbd></td><td>Back to Pulse</td></tr>
+            <tr><td><kbd>B</kbd> / <kbd>S</kbd></td><td>Buy / sell on a token page, focus the amount</td></tr>
+            <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Switch preset on a token page</td></tr>
+            <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>Enter</kbd> <kbd>Esc</kbd></td><td>Move through search results, open, close</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section id="faq">
+        <p class="eyebrow"><span data-pixel="file"></span>FAQ</p>
+        <h2>Questions.</h2>
+        <details class="faq"><summary>Can Ghostprint take my funds?</summary><div><p>No. It has no server holding funds or keys. Every transaction is built in your browser and signed by you or by a key derived from your own signature. Ghost funds in transit are held by NEAR Intents and refunded to you if a route fails.</p></div></details>
+        <details class="faq"><summary>Why did my trade fail?</summary><div><p>Usually the price moved past your slippage, or the transaction didn't land before it expired. Nothing but the network fee is spent when a swap fails. Try a faster preset or more slippage.</p></div></details>
+        <details class="faq"><summary>Is Ghost mode anonymous?</summary><div><p>No tool makes you anonymous. Ghost mode removes the direct on-chain link between your wallet and the wallet that buys. Timing and amounts can still be matched by someone watching closely, so vary them.</p></div></details>
+        <details class="faq"><summary>Where are my instant and ghost wallets if I clear my browser?</summary><div><p>Nowhere, and that's fine: they were never stored. Connect the same main wallet, sign the same message, and they come back with their balances.</p></div></details>
+        <details class="faq"><summary>Do limit orders pay the 0.5% fee?</summary><div><p>Not today. Jupiter fills limit orders itself; terminal market trades and ghost buys pay the fee.</p></div></details>
+        <details class="faq"><summary>Why is a sniper or stop loss tied to the open tab?</summary><div><p>Because it signs from the instant wallet, whose key only exists in your tab. Nothing on a server can sign for you. For orders that must fill while you're away, use a limit order.</p></div></details>
+      </section>
+    </article>
+  </div>
+
+  <footer>
+    <div>
+      <p class="big">A wallet should only show what you choose to sign.</p>
+      <span data-pixel="word" class="word"></span>
+    </div>
+    <p class="small">Ghostprint is in beta. The terminal routes swaps through Jupiter and never holds your funds. Ghost mode is in beta and the token is not live. Nothing here is financial advice or an offer to sell anything.</p>
+  </footer>
+</div>
+</body>
+</html>

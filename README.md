@@ -32,6 +32,7 @@ The pages load ES modules, so serve the folder over HTTP:
 npm run serve        # python3 -m http.server 5178
 open http://localhost:5178          # landing page
 open http://localhost:5178/app.html # terminal
+open http://localhost:5178/docs.html # docs
 ```
 
 GitHub Pages serves `main` as-is (`.nojekyll`).
@@ -44,7 +45,7 @@ GitHub Pages serves `main` as-is (`.nojekyll`).
 
 `config.js` holds public values only:
 - `TREASURY`: the wallet that receives fees
-- `FEE_BPS`: the fee (50 = 0.5%). The landing page copy also says 0.5%, so change both together.
+- `FEE_BPS`: the fee (50 = 0.5%). The docs read it from `config.js`; the landing page copy and the transaction diagram label say 0.5%, so update those too.
 - `JUP_BASE` and `JUP_API_KEY`: leave the key empty. A key in a static site is shared by every visitor; see the comment in the file.
 - slippage default and the cap on priority fees
 - `ONECLICK_JWT`: optional NEAR Intents key. Without it 1Click adds a 0.1–0.2% fee per route; like the Jupiter key it's public in a static site.
@@ -64,7 +65,10 @@ Tests run against a fake chain (`test/mockchain.mjs`), fake Jupiter responses (`
 
 ## Files
 
-- `index.html`: landing page and the Exposure tracer
+- `index.html` + `landing.js`: landing page and the Exposure tracer
+- `docs.html` + `docs.js`: documentation, with live isometric diagrams
+- `art.js`: the shared art toolkit (isometric projection, boxes, cables, union slabs, halftone, pixel glyphs, the animated ghost logo, the hero machine, `flow`/`txStack`/`curveTank` diagram builders, terminal emblems), one animation clock that pauses off-screen and honors reduced motion
+- `diagrams.js`: the explanatory drawings (ghost route and exit, wallet derivation, overview, proxy, Pulse sources, limit order, autopilot, transaction stack, bonding curve), shared by the landing page and the docs
 - `app.html`: the terminal's markup and styles; `terminal.js`: its views and logic
 - `pump.js`: pump.fun bonding-curve and trade-event decoding
 - `feeds.js`: PumpPortal websocket, RPC live trades, curve reads, metadata, holders, tracked-wallet swaps

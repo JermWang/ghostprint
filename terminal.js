@@ -8,6 +8,7 @@ import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, seedFingerprint,
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
 import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint, mergeHistory } from "./market.js";
 import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory } from "./feeds.js";
+import { renderPixels, emblem } from "./art.js";
 
 const web3 = window.solanaWeb3;
 const $ = id => document.getElementById(id);
@@ -16,7 +17,7 @@ const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
 /* ---------- small helpers ---------- */
 const make = (tag, cls, s) => { const e = document.createElement(tag); if (cls) e.className = cls; if (s !== undefined && s !== null) e.textContent = s; return e; };
 const text = (el, s) => { el.textContent = s; return el; };
-const emptyRow = (table, msg) => { const tr = make("tr"), td = make("td", "tdempty", msg); td.colSpan = 12; tr.append(td); table.append(tr); };
+const emptyRow = (table, msg, art) => { const tr = make("tr"), td = make("td", "tdempty", art ? null : msg); if (art) td.append(emptyArt(art, msg, "tdart")); td.colSpan = 12; tr.append(td); table.append(tr); };
 const store = {
   get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
@@ -102,19 +103,10 @@ async function lookupTokens(mints) {
 const symbolOf = mint => tokenInfo.get(mint)?.symbol || board.tokens.get(mint)?.symbol || short(mint);
 const iconOf = mint => tokenInfo.get(mint)?.icon || board.tokens.get(mint)?.image;
 
-/* ---------- pixel brand ---------- */
-(() => {
-  const FONT = { G: [".###.", "#...#", "#....", "#.###", "#...#", "#...#", ".###."], H: ["#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"], O: [".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."], S: [".####", "#....", "#....", ".###.", "....#", "....#", "####."], T: ["#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."], P: ["####.", "#...#", "#...#", "####.", "#....", "#....", "#...."], R: ["####.", "#...#", "#...#", "####.", "#.#..", "#..#.", "#...#"], I: ["###", ".#.", ".#.", ".#.", ".#.", ".#.", "###"], N: ["#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"] };
-  const GHOST = ["...####...", ".########.", "##########", "##..##..##", "##..##..##", "##########", "##########", "###....###", "##########", "##########", "##.##.##.#", "#..#..#..#"];
-  const NS = "http://www.w3.org/2000/svg";
-  document.querySelectorAll("[data-pixel]").forEach(h => {
-    const rows = h.dataset.pixel === "ghost" ? GHOST : (() => { const r = Array(7).fill(""); [..."GHOSTPRINT"].forEach((ch, i) => FONT[ch].forEach((row, y) => { r[y] += (i ? "." : "") + row; })); return r; })();
-    const svg = document.createElementNS(NS, "svg"), w = Math.max(...rows.map(r => r.length));
-    svg.setAttribute("viewBox", `0 0 ${w * 10} ${rows.length * 10}`); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("class", h.getAttribute("class"));
-    rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== "#") return; const e = document.createElementNS(NS, "rect"); e.setAttribute("x", x * 10 + .7); e.setAttribute("y", y * 10 + .7); e.setAttribute("width", 8.6); e.setAttribute("height", 8.6); e.setAttribute("fill", "currentColor"); svg.appendChild(e); }));
-    h.replaceWith(svg);
-  });
-})();
+/* ---------- brand and art ---------- */
+renderPixels(document, { assembleWord: false });
+// An empty state with a small isometric drawing above the message.
+const emptyArt = (kind, msg, cls = "empty") => { const d = make("div", cls + " art-empty"); d.dataset.msg = msg; d.append(emblem(kind), make("span", "", msg)); return d; };
 
 /* ---------- wallets ---------- */
 function providers() {
@@ -322,7 +314,11 @@ function renderPulse(force) {
     const list = board.columns(filters[key] || {})[key];
     text(col.querySelector(".count"), String(list.length));
     const host = col.querySelector(".plist");
-    if (!list.length) { host.textContent = ""; host.append(make("div", "empty", key === "new" ? "Waiting for new pump.fun launches…" : key === "final" ? `Tokens past ${settings.finalStretch}% of their bonding curve show here.` : "Graduated tokens show here.")); continue; }
+    if (!list.length) {
+      const msg = key === "new" ? "Waiting for new pump.fun launches…" : key === "final" ? `Tokens past ${settings.finalStretch}% of their bonding curve show here.` : "Graduated tokens show here.";
+      if (host.querySelector(".empty")?.dataset.msg !== msg) { host.textContent = ""; host.append(emptyArt("stream", msg)); }
+      continue;
+    }
     const els = list.map(t => { let el = cardEls.get(t.mint); if (!el) { el = buildCard(t); cardEls.set(t.mint, el); } updateCard(el, t); return el; });
     host.querySelector(".empty")?.remove();
     els.forEach((el, i) => { if (host.children[i] !== el) host.insertBefore(el, host.children[i] || null); });
@@ -490,7 +486,7 @@ async function loadPairs(mint, statsOnly) {
     }
     if (statsOnly) return;
     const box = $("chart");
-    if (!best) { box.textContent = ""; box.append(make("div", "empty", "No pool on DexScreener yet. Live trades below come straight from the chain.")); return; }
+    if (!best) { box.textContent = ""; box.append(emptyArt("chart", "No pool on DexScreener yet. Live trades below come straight from the chain.")); return; }
     const f = document.createElement("iframe");
     f.title = "Price chart"; f.loading = "lazy";
     f.src = `https://dexscreener.com/solana/${best.pairAddress}?embed=1&theme=dark&trades=0&info=0`;
@@ -1129,7 +1125,7 @@ function renderTracker() {
 }
 function renderFeed() {
   const table = $("tk-feed"); table.textContent = "";
-  if (!tracked().length) { emptyRow(table, "Add a wallet to see its swaps here. Tip: the Holders tab on any token has a Track button."); return; }
+  if (!tracked().length) { emptyRow(table, "Add a wallet to see its swaps here. Tip: the Holders tab on any token has a Track button.", "stream"); return; }
   if (!feed.length) { emptyRow(table, "Watching… swaps show up within about 20 seconds."); return; }
   const head = make("tr"); ["Age", "Wallet", "Type", "Token", "SOL", "Tokens", "", ""].forEach((h, i) => head.append(make("th", i > 3 && i < 6 ? "num" : "", h))); table.append(head);
   for (const s of feed) {
@@ -1152,7 +1148,7 @@ async function renderPortfolio() {
   $("pf-wallet").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === pfWallet));
   cards.textContent = ""; table.textContent = ""; act.textContent = "";
   const card = (k, v, c) => { const d = make("div", "panel card"); d.append(make("div", "k", k), cls(make("div", "v", v), c)); cards.append(d); };
-  if (!S.wallet) { card("Wallet", "Not connected"); emptyRow(table, "Connect a wallet to see positions."); renderGhosts(); renderPfOrders(); return; }
+  if (!S.wallet) { card("Wallet", "Not connected"); emptyRow(table, "Connect a wallet to see positions.", "ghost"); renderGhosts(); renderPfOrders(); return; }
   const pk = pfWallet === "instant" ? S.instant?.pk : S.wallet.pk;
   if (!pk) { card("Instant wallet", "Locked"); const tr = table.insertRow(), td = make("td", "tdempty"); const b = make("button", "btn small primary", "Unlock instant wallet"); b.type = "button"; b.addEventListener("click", async () => { try { await instantWallet(); renderPortfolio(); } catch (e) { toast(errMsg(e), "err"); } }); td.append(b); tr.append(td); renderGhosts(); renderPfOrders(); return; }
   emptyRow(table, "Loading positions…");
@@ -1182,7 +1178,7 @@ async function renderPortfolio() {
       card("Realized PnL", `${real >= 0 ? "+" : ""}${solFmt(real)} SOL`, real);
       table.textContent = "";
       const head = make("tr"); ["Token", "Holding", "Value", "Avg cost", "Unrealized", "Realized", "Sell"].forEach((h, i) => head.append(make("th", i ? "num" : "", h))); table.append(head);
-      if (!all.length) emptyRow(table, "No positions yet.");
+      if (!all.length) emptyRow(table, "No positions yet.", "ghost");
       for (const r of all) {
         const tr = make("tr"), tok = make("td"), a = make("a", "cell-tok"); a.href = `#/token/${r.mint}`; a.append(icon(make("img", "tok-icon"), iconOf(r.mint)), make("b", "", symbolOf(r.mint))); tok.append(a);
         const sells = make("td", "num");
