@@ -3,858 +3,417 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Ghostprint terminal: trade Solana tokens through Jupiter, with Ghost mode privacy on the way.">
+<meta name="description" content="Ghostprint terminal: live pump.fun Pulse, one-click trading through Jupiter, wallet tracking, and Ghost mode privacy over NEAR Intents.">
 <title>Ghostprint Terminal</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-/* Terminal: the ink side of the Ghostprint system. Paper text on ink panels, one infrared accent for anything live or at risk. */
+/* Terminal: dense ink panels, mono numbers, one infrared accent for anything live or at risk, green for gains. */
 :root{
-  --ground:#D6D8D9;
-  --paper:#EEEFEE;
-  --ink:#1D1F22;
-  --ink-0:#16181A;
-  --ink-2:#26292D;
-  --ink-3:#31353A;
-  --mute:#5F646B;
-  --mute-ink:#9A9EA5;
-  --accent:#FF5A24;
-  --up:#4FD18B;
-  --font-display:"Sora","Segoe UI",system-ui,sans-serif;
-  --font-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
-  --r:12px;
-  color-scheme:dark;
+  --paper:#EEEFEE;--ink:#1D1F22;--ink-0:#141618;--ink-1:#191B1E;--ink-2:#24272B;--ink-3:#30343A;--line:#2A2D32;
+  --mute:#5F646B;--mute-ink:#9A9EA5;--accent:#FF5A24;--up:#4FD18B;--warn:#F2C14E;
+  --font-display:"Sora","Segoe UI",system-ui,sans-serif;--font-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:10px;color-scheme:dark;
 }
 *{box-sizing:border-box}
-body{margin:0;background:var(--ink-0);color:var(--paper);font-family:var(--font-display);font-size:15px;line-height:1.5;min-height:100vh;overflow-x:hidden}
+html,body{height:100%}
+body{margin:0;background:var(--ink-0);color:var(--paper);font-family:var(--font-display);font-size:14px;line-height:1.45;overflow-x:hidden}
 a{color:inherit}
-button{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.mono{font-family:var(--font-mono)}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.mono{font-family:var(--font-mono)}
+.up{color:var(--up)}.down{color:var(--accent)}.warnc{color:var(--warn)}.muted{color:var(--mute-ink)}
+[hidden]{display:none!important}
+
+/* buttons and inputs */
+.btn{font:600 .8rem var(--font-display);border-radius:999px;padding:7px 14px;border:1.5px solid var(--ink-3);background:transparent;color:var(--paper);cursor:pointer;white-space:nowrap;transition:transform .12s,background .12s,border-color .12s}
+.btn:hover:not(:disabled){border-color:var(--mute-ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--ink)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08)}
+.btn.buy{background:var(--up);border-color:var(--up);color:var(--ink)}
+.btn.small{padding:4px 10px;font-size:.72rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.inp{background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:8px;padding:7px 10px;font:500 .78rem var(--font-mono);color:var(--paper);min-width:0}
+.inp:focus{outline:none;border-color:var(--accent)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 .68rem var(--font-mono);border:1px solid var(--ink-3);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--mute-ink);display:inline-block}
+.dot.live{background:var(--up);box-shadow:0 0 0 3px color-mix(in srgb,var(--up) 25%,transparent)}
+.dot.warn{background:var(--warn)}
+.tok-icon{width:28px;height:28px;border-radius:7px;background:var(--ink-3);object-fit:cover;display:block;flex:none}
 
 /* top bar */
-.bar{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:10px 16px;background:color-mix(in srgb,var(--ink-0) 88%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--ink-3)}
-.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
-.brand .ghost{width:24px;height:24px;display:block;color:var(--paper)}
-.brand .word{height:14px;width:auto;display:block;color:var(--paper)}
-.brand .tag{font:500 .62rem var(--font-mono);letter-spacing:.14em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:2px 7px}
-.search{position:relative;max-width:520px;width:100%;justify-self:center}
-.search input{width:100%;font:500 .8rem var(--font-mono);background:var(--ink-2);color:var(--paper);border:1.5px solid var(--ink-3);border-radius:999px;padding:9px 14px 9px 34px}
-.search input:focus{outline:none;border-color:var(--accent)}
-.search svg{position:absolute;left:12px;top:50%;width:14px;height:14px;transform:translateY(-50%);color:var(--mute-ink)}
-.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:12px;padding:6px;list-style:none;margin:0;max-height:360px;overflow:auto;box-shadow:0 20px 40px -20px #000}
-.results[hidden]{display:none}
+.bar{position:sticky;top:0;z-index:30;display:grid;grid-template-columns:auto auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:8px 14px;background:color-mix(in srgb,var(--ink-0) 92%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:9px;text-decoration:none}
+.brand .ghost{width:22px;height:22px;display:block}
+.brand .word{height:12px;width:auto;display:block}
+.nav{display:flex;gap:2px}
+.nav a{font:500 .74rem var(--font-mono);letter-spacing:.06em;text-transform:uppercase;text-decoration:none;padding:7px 10px;border-radius:8px;color:var(--mute-ink);white-space:nowrap}
+.nav a:hover{color:var(--paper)}
+.nav a[aria-current="page"]{background:var(--ink-2);color:var(--paper)}
+.search{position:relative;max-width:460px;width:100%;justify-self:center}
+.search input{width:100%;padding:8px 12px 8px 32px;border-radius:999px}
+.search svg{position:absolute;left:11px;top:50%;width:13px;height:13px;transform:translateY(-50%);color:var(--mute-ink)}
+.search kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:.64rem var(--font-mono);color:var(--mute-ink);border:1px solid var(--ink-3);border-radius:4px;padding:0 5px}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--ink-1);border:1px solid var(--ink-3);border-radius:12px;padding:6px;list-style:none;margin:0;max-height:420px;overflow:auto;box-shadow:0 24px 48px -24px #000;z-index:40}
 .results li button{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:7px 8px;cursor:pointer}
-.results li button:hover,.results li button[aria-selected="true"]{background:var(--ink-3)}
+.results li button:hover,.results li button[aria-selected="true"]{background:var(--ink-2)}
 .results .sym{font-weight:600}
-.results .nm{font:.68rem var(--font-mono);color:var(--mute-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.results .num{font:.7rem var(--font-mono);color:var(--mute-ink);text-align:right}
+.results .nm,.results .num{font:.68rem var(--font-mono);color:var(--mute-ink)}
+.results .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.results .num{text-align:right}
 .results .note{font:.72rem var(--font-mono);color:var(--mute-ink);padding:8px}
-.tok-icon{width:28px;height:28px;border-radius:50%;background:var(--ink-3);object-fit:cover;display:block}
-.right{display:flex;gap:8px;align-items:center}
-.btn{font:600 .82rem var(--font-display);border-radius:999px;padding:8px 15px;border:1.5px solid var(--paper);background:transparent;color:var(--paper);cursor:pointer;white-space:nowrap;transition:transform .15s,background .15s}
-.btn:hover:not(:disabled){transform:translateY(-1px)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--ink)}
-.btn.quiet{border-color:var(--ink-3)}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.wallet-menu{position:absolute;right:16px;top:58px;background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:12px;padding:6px;min-width:200px;display:grid;gap:2px}
-.wallet-menu[hidden]{display:none}
-.wallet-menu button,.wallet-menu a{display:block;text-align:left;background:none;border:0;border-radius:8px;padding:8px 10px;cursor:pointer;text-decoration:none;font-size:.86rem}
-.wallet-menu button:hover,.wallet-menu a:hover{background:var(--ink-3)}
-.wallet-menu p{margin:4px 10px 8px;font:.72rem var(--font-mono);color:var(--mute-ink)}
-@media (max-width:720px){.bar{grid-template-columns:auto auto;}.search{grid-column:1/-1;grid-row:2;max-width:none}.brand .word{display:none}}
+.right{display:flex;gap:6px;align-items:center}
+.qb-amt{display:flex;align-items:center;gap:4px;background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:999px;padding:2px 8px 2px 10px}
+.qb-amt span{font:.74rem var(--font-mono);color:var(--accent)}
+.qb-amt span:last-child{color:var(--mute-ink)}
+.qb-amt input{width:42px;background:none;border:0;padding:5px 2px;font:600 .78rem var(--font-mono);color:var(--paper)}
+.qb-amt input:focus{outline:none}
+@media (max-width:1100px){.nav a{padding:7px 7px}.search kbd{display:none}}
+@media (max-width:860px){
+  .bar{grid-template-columns:auto minmax(0,1fr);gap:8px}
+  .right{justify-self:end}
+  .nav{grid-column:1/-1;grid-row:3;overflow-x:auto}
+  .search{grid-column:1/-1;grid-row:2;max-width:none}
+  .brand .word,.solchip{display:none}
+}
 
-/* layout */
-.grid{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:14px;padding:14px 16px 40px;max-width:1440px;margin-inline:auto}
-.panel{background:var(--ink);border:1px solid var(--ink-3);border-radius:var(--r)}
-@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}.trade{order:-1}}
+/* watchlist bar */
+.watchbar{display:flex;gap:6px;align-items:center;padding:6px 14px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;min-height:36px}
+.watchbar .lab{font:.62rem var(--font-mono);letter-spacing:.12em;color:var(--mute-ink);text-transform:uppercase;flex:none}
+.watchbar a{flex:none;display:flex;align-items:center;gap:6px;text-decoration:none;font:.72rem var(--font-mono);padding:3px 9px;border-radius:999px;background:var(--ink-1);border:1px solid var(--line)}
+.watchbar a img{width:16px;height:16px;border-radius:4px}
+.watchbar .muted{font:.7rem var(--font-mono)}
 
-.token-head{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:center;padding:14px 16px}
-.token-id{display:flex;gap:12px;align-items:center;min-width:0}
-.token-id .tok-icon{width:38px;height:38px}
-.token-id h1{margin:0;font-size:1.25rem;letter-spacing:-.01em;line-height:1.1}
-.token-id .mint{font:.68rem var(--font-mono);color:var(--mute-ink);background:none;border:0;padding:0;cursor:pointer}
-.token-id .mint:hover{color:var(--paper)}
-.stats{display:flex;flex-wrap:wrap;gap:6px 22px;margin-left:auto}
-.stat{display:flex;flex-direction:column;min-width:0}
-.stat .k{font:.6rem var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink)}
-.stat .v{font:500 .9rem var(--font-mono);font-variant-numeric:tabular-nums}
-.up{color:var(--up)}.down{color:var(--accent)}
-.chart{position:relative;height:clamp(320px,52vh,560px);border-top:1px solid var(--ink-3);overflow:hidden;border-radius:0 0 var(--r) var(--r)}
-.chart iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-.chart .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font:.78rem var(--font-mono);color:var(--mute-ink);padding:20px;background-image:radial-gradient(var(--ink-3) .8px,transparent .9px);background-size:8px 8px}
+.view{padding:12px 14px 40px;max-width:1680px;margin-inline:auto}
+.panel{background:var(--ink-1);border:1px solid var(--line);border-radius:var(--r);min-width:0}
+.phead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid var(--line)}
+.phead h2{margin:0;font-size:.95rem;letter-spacing:-.01em}
+.phead .grow{flex:1}
 
-.tabs{margin-top:14px}
-.tablist{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--ink-3);overflow-x:auto;scrollbar-width:none}
-.tablist button{flex:none}
-@media (max-width:420px){.tablist button{padding:7px 9px;letter-spacing:.06em}}
-.tablist button{font:500 .72rem var(--font-mono);letter-spacing:.1em;text-transform:uppercase;background:none;border:0;border-radius:8px;padding:7px 12px;color:var(--mute-ink);cursor:pointer}
-.tablist button[aria-selected="true"]{background:var(--ink-3);color:var(--paper)}
-.tabpanel{padding:12px 14px 16px;min-height:120px}
-.tabpanel[hidden]{display:none}
-table{width:100%;border-collapse:collapse;font:.78rem var(--font-mono);font-variant-numeric:tabular-nums}
-th{text-align:left;font-weight:500;font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink);padding:6px 8px;border-bottom:1px solid var(--ink-3)}
-td{padding:8px;border-bottom:1px solid var(--ink-2)}
-td.num,th.num{text-align:right}
+/* pulse */
+.pulse-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.pulse-top h1{margin:0;font-size:1.15rem}
+.pulse-cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.pcol{display:flex;flex-direction:column;min-height:calc(100vh - 170px)}
+.pcol .phead .count{font:.68rem var(--font-mono);color:var(--mute-ink)}
+.pcol .paused{font:.62rem var(--font-mono);color:var(--warn);letter-spacing:.08em}
+.pcol .filters{display:flex;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.pcol .filters .inp{flex:1 1 90px;padding:5px 8px;font-size:.7rem}
+.pcol .filters label{display:flex;align-items:center;gap:5px;font:.68rem var(--font-mono);color:var(--mute-ink)}
+.plist{flex:1;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:5px;max-height:calc(100vh - 230px)}
+.plist .empty{font:.74rem var(--font-mono);color:var(--mute-ink);padding:18px 10px;text-align:center}
+.pcard{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px;border-radius:9px;background:var(--ink-2);border:1px solid transparent;cursor:pointer;color:inherit;text-decoration:none;position:relative}
+.pcard:hover{border-color:var(--ink-3)}
+.pcard.fresh{animation:flash 1.2s ease-out}
+@keyframes flash{from{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--ink-2))}}
+.pcard .tok-icon{width:44px;height:44px;border-radius:9px}
+.pc-top{display:flex;align-items:baseline;gap:6px;min-width:0}
+.pc-top b{font-size:.86rem;white-space:nowrap}
+.pc-top .nm{font-size:.74rem;color:var(--mute-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pc-top .age{margin-left:auto;font:.68rem var(--font-mono);color:var(--up);flex:none}
+.pc-meta{display:flex;gap:9px;flex-wrap:wrap;font:.68rem var(--font-mono);color:var(--mute-ink);margin-top:3px}
+.pc-meta b{color:var(--paper);font-weight:500}
+.pc-meta .soc{display:flex;gap:6px}
+.pc-meta .soc a{color:var(--mute-ink);text-decoration:none}
+.pc-meta .soc a:hover{color:var(--paper)}
+.pbar{height:4px;border-radius:2px;background:var(--ink-3);margin-top:6px;overflow:hidden}
+.pbar i{display:block;height:100%;background:var(--up);border-radius:2px}
+.pbar.hot i{background:var(--accent)}
+.qb{font:600 .74rem var(--font-mono);border-radius:8px;border:1px solid var(--ink-3);background:var(--ink-1);color:var(--accent);padding:6px 9px;cursor:pointer;white-space:nowrap}
+.qb:hover{border-color:var(--accent)}
+.qb:disabled{opacity:.5;cursor:wait}
+.seg.mob-cols{display:none}
+@media (max-width:1100px){.pulse-cols{grid-template-columns:minmax(0,1fr)}.pcol{min-height:0}.pcol:not(.on){display:none}.seg.mob-cols{display:inline-flex}.plist{max-height:none}}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font:.76rem var(--font-mono);font-variant-numeric:tabular-nums}
+th{text-align:left;font-weight:500;font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink);padding:7px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--ink-1)}
+td{padding:7px 10px;border-bottom:1px solid var(--ink-2);white-space:nowrap}
+.num{text-align:right}
 tr.pick{cursor:pointer}
 tr.pick:hover td{background:var(--ink-2)}
+.tscroll{overflow-x:auto}
 .cell-tok{display:flex;gap:8px;align-items:center}
-.cell-tok .tok-icon{width:20px;height:20px}
-.muted{color:var(--mute-ink);font:.76rem var(--font-mono)}
+.cell-tok .tok-icon{width:22px;height:22px;border-radius:5px}
+.seg{display:inline-flex;background:var(--ink-2);border-radius:999px;padding:3px;gap:2px}
+.seg button{border:0;background:none;border-radius:999px;padding:5px 11px;font:500 .72rem var(--font-mono);cursor:pointer;color:var(--mute-ink)}
+.seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink)}
+.tdempty{padding:18px 12px;font:.74rem var(--font-mono);color:var(--mute-ink)}
 
-/* exposure */
-.expo-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
-.score{font:700 1.8rem var(--font-mono);line-height:1}
-.findings{list-style:none;margin:0;padding:0;display:grid;gap:3px;font:.74rem var(--font-mono)}
-.findings li{display:grid;grid-template-columns:6.6em minmax(0,1fr) auto;gap:10px;padding:6px 8px;border-radius:6px;background:var(--ink-2)}
-.findings .k{color:var(--mute-ink);text-transform:uppercase;letter-spacing:.06em;font-size:.64rem}
-.findings .g{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
-.findings li.sev-med .g{color:var(--paper)}.findings li.sev-low .g{color:var(--mute-ink)}
-.findings .why{grid-column:1/-1;color:var(--mute-ink);font-size:.64rem}
+/* token page */
+.tokview{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px}
+.tok-main{display:flex;flex-direction:column;gap:10px;min-width:0}
+.tok-side{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (max-width:1000px){.tokview{display:flex;flex-direction:column}.tok-main,.tok-side{display:contents}.tok-main>.panel:first-child{order:1}.tok-side>.trade{order:2}.tok-main>.panel:nth-child(2){order:3}.tok-side>.audit{order:4}.chart{height:320px}}
+.tok-head{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding:12px 14px}
+.tok-id{display:flex;gap:10px;align-items:center;min-width:0}
+.tok-id .tok-icon{width:40px;height:40px;border-radius:9px}
+.tok-id h1{margin:0;font-size:1.1rem;line-height:1.15;display:flex;gap:8px;align-items:center}
+.tok-id .sub{font:.68rem var(--font-mono);color:var(--mute-ink);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tok-id .sub button{background:none;border:0;padding:0;cursor:pointer;color:var(--mute-ink);font:inherit}
+.tok-id .sub button:hover,.tok-id .sub a:hover{color:var(--paper)}
+.tok-id .sub a{text-decoration:none}
+.star{background:none;border:0;cursor:pointer;font-size:1rem;color:var(--mute-ink);padding:0}
+.star[aria-pressed="true"]{color:var(--warn)}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;margin-left:auto}
+.stat{display:flex;flex-direction:column}
+.stat .k{font:.58rem var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink)}
+.stat .v{font:500 .86rem var(--font-mono);font-variant-numeric:tabular-nums}
+.chart{position:relative;height:clamp(300px,50vh,560px);overflow:hidden;border-top:1px solid var(--line)}
+.chart iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.chart .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font:.76rem var(--font-mono);color:var(--mute-ink);padding:20px;background-image:radial-gradient(var(--ink-3) .8px,transparent .9px);background-size:8px 8px}
+.curvebar{padding:10px 14px;border-top:1px solid var(--line);display:flex;gap:10px;align-items:center;font:.7rem var(--font-mono)}
+.curvebar .pbar{flex:1;margin:0;height:6px}
+.tablist{display:flex;gap:2px;padding:6px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tablist button{flex:none;font:500 .7rem var(--font-mono);letter-spacing:.08em;text-transform:uppercase;background:none;border:0;border-radius:7px;padding:6px 11px;color:var(--mute-ink);cursor:pointer}
+.tablist button[aria-selected="true"]{background:var(--ink-3);color:var(--paper)}
+.tabpanel{min-height:160px;max-height:440px;overflow:auto}
+tr.trade-buy td.side{color:var(--up)}
+tr.trade-sell td.side{color:var(--accent)}
+tr.mine td{background:color-mix(in srgb,var(--warn) 9%,transparent)}
+tr.newrow td{animation:rowflash 1s ease-out}
+@keyframes rowflash{from{background:color-mix(in srgb,var(--paper) 10%,transparent)}}
+.audit{padding:12px 14px;display:grid;gap:7px;font:.74rem var(--font-mono)}
+.audit .row{display:flex;justify-content:space-between;gap:10px}
+.audit .row .k{color:var(--mute-ink)}
+.audit h3{margin:0 0 2px;font:600 .82rem var(--font-display)}
+.audit p{margin:0;color:var(--mute-ink);font-size:.68rem;line-height:1.5;overflow-wrap:anywhere}
 
 /* trade panel */
-.trade{padding:14px;display:flex;flex-direction:column;gap:12px;align-self:start;position:sticky;top:72px}
-@media (max-width:980px){.trade{position:static}}
-.trade-tok{display:none;align-items:center;gap:8px;font:600 .9rem var(--font-display)}
-.trade-tok .tok-icon{width:22px;height:22px}
-.trade-tok .p{margin-left:auto;font:500 .78rem var(--font-mono);color:var(--mute-ink)}
-@media (max-width:980px){.trade-tok{display:flex}}
-.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--ink-2);border-radius:999px;padding:3px}
-.seg button{border:0;background:none;border-radius:999px;padding:8px;font-weight:600;cursor:pointer;color:var(--mute-ink)}
-.seg button[aria-pressed="true"].buy{background:var(--paper);color:var(--ink)}
-.seg button[aria-pressed="true"].sell{background:var(--accent);color:var(--ink)}
-.field{display:flex;flex-direction:column;gap:6px}
-.field-top{display:flex;justify-content:space-between;font:.66rem var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute-ink)}
-.field-top button{background:none;border:0;padding:0;color:var(--mute-ink);font:inherit;cursor:pointer;text-transform:none;letter-spacing:0}
-.field-top button:hover{color:var(--paper)}
-.amount{display:flex;align-items:center;background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:12px;padding:4px 12px}
+.trade{padding:12px;display:flex;flex-direction:column;gap:10px}
+.trade>.seg{display:grid;grid-template-columns:1fr 1fr;width:100%}
+.trade>.seg button{padding:8px;font:600 .84rem var(--font-display)}
+.trade>.seg button.b[aria-pressed="true"]{background:var(--up);color:var(--ink)}
+.trade>.seg button.s[aria-pressed="true"]{background:var(--accent);color:var(--ink)}
+.from{display:flex;justify-content:space-between;align-items:center;gap:8px;font:.7rem var(--font-mono);color:var(--mute-ink)}
+.from .seg button{padding:4px 9px;font:500 .68rem var(--font-mono)}
+.amount{display:flex;align-items:center;background:var(--ink-2);border:1.5px solid var(--ink-3);border-radius:10px;padding:2px 12px}
 .amount:focus-within{border-color:var(--accent)}
-.amount input{flex:1;min-width:0;background:none;border:0;color:var(--paper);font:600 1.35rem var(--font-mono);padding:8px 0}
+.amount input{flex:1;min-width:0;background:none;border:0;font:600 1.25rem var(--font-mono);padding:8px 0}
 .amount input:focus{outline:none}
-.amount .unit{font:600 .8rem var(--font-mono);color:var(--mute-ink);white-space:nowrap}
-.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.quick button{font:500 .74rem var(--font-mono);background:var(--ink-2);border:1px solid var(--ink-3);border-radius:8px;padding:7px 4px;cursor:pointer}
+.amount .unit{font:600 .76rem var(--font-mono);color:var(--mute-ink)}
+.quick{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.quick button{font:500 .72rem var(--font-mono);background:var(--ink-2);border:1px solid var(--ink-3);border-radius:7px;padding:6px 2px;cursor:pointer}
 .quick button:hover{border-color:var(--mute-ink)}
-.row{display:flex;justify-content:space-between;align-items:center;gap:10px;font:.74rem var(--font-mono)}
-.row .k{color:var(--mute-ink)}
-.slip{display:flex;gap:4px}
-.slip button{font:500 .7rem var(--font-mono);background:var(--ink-2);border:1px solid var(--ink-3);border-radius:7px;padding:4px 8px;cursor:pointer;color:var(--mute-ink)}
-.slip button[aria-pressed="true"]{border-color:var(--paper);color:var(--paper)}
-.ghost-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;border:1.5px dashed var(--ink-3)}
-.ghost-toggle b{display:block;font-size:.86rem}
-.ghost-toggle span{font:.66rem var(--font-mono);color:var(--mute-ink)}
-.switch{width:38px;height:22px;border-radius:999px;background:var(--ink-3);position:relative;flex:none;border:0;cursor:pointer;transition:background .15s}
-.switch::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--mute-ink);transition:transform .15s,background .15s}
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.presets button{font:500 .64rem var(--font-mono);background:var(--ink-2);border:1px solid var(--ink-3);border-radius:7px;padding:5px 2px;cursor:pointer;color:var(--mute-ink);line-height:1.3}
+.presets button b{display:block;color:var(--paper);font-size:.72rem}
+.presets button[aria-pressed="true"]{border-color:var(--paper)}
+.ghost-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border-radius:10px;border:1.5px dashed var(--ink-3)}
+.ghost-toggle b{display:block;font-size:.8rem}
+.ghost-toggle span{font:.64rem var(--font-mono);color:var(--mute-ink)}
+.ghost-toggle.on{border-color:var(--accent);border-style:solid}
+.switch{width:36px;height:20px;border-radius:999px;background:var(--ink-3);position:relative;flex:none;border:0;cursor:pointer}
+.switch::after{content:"";position:absolute;left:3px;top:3px;width:14px;height:14px;border-radius:50%;background:var(--mute-ink);transition:transform .15s}
 .switch[aria-checked="true"]{background:var(--accent)}
 .switch[aria-checked="true"]::after{transform:translateX(16px);background:var(--ink)}
-.ghost-toggle.on{border-color:var(--accent);border-style:solid}
-.gsteps{margin:0;padding:0 0 0 18px;display:grid;gap:4px;font:.72rem var(--font-mono);color:var(--mute-ink)}
-.gsteps[hidden]{display:none}
-.gsteps li.active{color:var(--paper)}
-.gsteps li.active::marker{color:var(--accent)}
-.gsteps li.done{color:var(--up)}
-.ghost-list{display:grid;gap:8px}
-.ghost-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--ink-2);border-radius:10px;padding:10px 12px}
-.ghost-row .meta{font:.74rem var(--font-mono);color:var(--mute-ink);overflow-wrap:anywhere}
-.ghost-row .meta b{color:var(--paper);font-weight:600}
+.switch:disabled{cursor:not-allowed;opacity:.5}
+.tag{font:500 .56rem var(--font-mono);letter-spacing:.12em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:2px}
+.quote{display:grid;gap:4px;padding:8px 10px;background:var(--ink-2);border-radius:10px;font:.72rem var(--font-mono)}
+.quote .row{display:flex;justify-content:space-between;gap:10px}
+.quote .row .k{color:var(--mute-ink)}
+.go{width:100%;padding:12px;font-size:.92rem}
+.status{margin:0;font:.7rem var(--font-mono);color:var(--mute-ink);min-height:1.2em;overflow-wrap:anywhere}
+.status.err{color:var(--accent)}.status.ok{color:var(--up)}
+.gsteps{margin:0;padding:0 0 0 18px;display:grid;gap:3px;font:.68rem var(--font-mono);color:var(--mute-ink)}
+.gsteps li.active{color:var(--paper)}.gsteps li.done{color:var(--up)}
+.fine{margin:0;font:.62rem var(--font-mono);color:var(--mute);line-height:1.5}
+
+/* tracker / portfolio */
+.two{display:grid;grid-template-columns:320px minmax(0,1fr);gap:10px;align-items:start}
+@media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
+.wl{list-style:none;margin:0;padding:6px;display:grid;gap:4px}
+.wl:empty{display:none}
+.wl li{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border-radius:8px;background:var(--ink-2);font:.72rem var(--font-mono);overflow-wrap:anywhere}
+.wl li .lab{font:600 .82rem var(--font-display)}
+.wl li button{background:none;border:0;color:var(--mute-ink);cursor:pointer}
+.form{display:grid;gap:6px;padding:10px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-bottom:10px}
+.card{padding:12px 14px}
+.card .k{font:.6rem var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink)}
+.card .v{font:600 1.15rem var(--font-mono);margin-top:3px}
+.ghost-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--ink-2);border-radius:9px;padding:9px 12px;font:.72rem var(--font-mono);overflow-wrap:anywhere}
 .ghost-row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.keybox{grid-column:1/-1;font:.68rem var(--font-mono);background:var(--ink-0);border:1px dashed var(--accent);border-radius:8px;padding:8px;overflow-wrap:anywhere}
-.soon{font:500 .58rem var(--font-mono);letter-spacing:.12em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:2px}
-.quote{display:grid;gap:5px;padding:10px 12px;background:var(--ink-2);border-radius:12px;min-height:40px}
-.quote[hidden]{display:none}
-.go{width:100%;padding:13px;font-size:.95rem}
-.status{margin:0;font:.72rem var(--font-mono);color:var(--mute-ink);min-height:1.2em;overflow-wrap:anywhere}
-.status.err{color:var(--accent)}
-.status.ok{color:var(--up)}
-.fine{margin:0;font:.64rem var(--font-mono);color:var(--mute);line-height:1.5}
-.fine a{color:var(--mute-ink)}
-@media (prefers-reduced-motion:reduce){.btn{transition:none}}
+#g-list>.muted,#x-list .muted{font-size:.72rem}
+.keybox{grid-column:1/-1;font:.66rem var(--font-mono);background:var(--ink-0);border:1px dashed var(--accent);border-radius:8px;padding:8px;overflow-wrap:anywhere}
+
+/* modal + toasts */
+dialog{background:var(--ink-1);color:var(--paper);border:1px solid var(--ink-3);border-radius:14px;padding:0;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 40px)}
+dialog::backdrop{background:rgba(0,0,0,.6)}
+.mhead{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.mhead h2{margin:0;font-size:1rem}
+.mbody{padding:14px 16px;display:grid;gap:14px;overflow:auto;max-height:calc(100vh - 120px)}
+.mbody h3{margin:0;font-size:.84rem}
+.mbody .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.mbody label{display:grid;gap:4px;font:.66rem var(--font-mono);color:var(--mute-ink);letter-spacing:.04em}
+.box{background:var(--ink-2);border-radius:10px;padding:12px;display:grid;gap:8px}
+.box .row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;font:.74rem var(--font-mono)}
+.box p{margin:0;font:.68rem var(--font-mono);color:var(--mute-ink);line-height:1.5}
+.toasts{position:fixed;right:14px;bottom:14px;display:grid;gap:8px;z-index:60;max-width:min(380px,calc(100vw - 28px))}
+.toast{background:var(--ink-2);border:1px solid var(--ink-3);border-left:3px solid var(--mute-ink);border-radius:10px;padding:10px 12px;font:.74rem var(--font-mono);box-shadow:0 16px 32px -16px #000;overflow-wrap:anywhere}
+.toast.ok{border-left-color:var(--up)}.toast.err{border-left-color:var(--accent)}.toast.info{border-left-color:var(--warn)}
+.toast a{color:var(--mute-ink)}
+@media (prefers-reduced-motion:reduce){.pcard.fresh,tr.newrow td{animation:none}.btn,.switch::after{transition:none}}
 </style>
 </head>
 <body>
 <header class="bar">
-  <a class="brand" href="./" aria-label="Ghostprint home"><span data-pixel="ghost" class="ghost"></span><span data-pixel="word" class="word"></span><span class="tag">TERMINAL</span></a>
+  <a class="brand" href="./" aria-label="Ghostprint home"><span data-pixel="ghost" class="ghost"></span><span data-pixel="word" class="word"></span></a>
+  <nav class="nav" aria-label="Terminal">
+    <a href="#/" data-route="pulse">Pulse</a>
+    <a href="#/trending" data-route="trending">Trending</a>
+    <a href="#/tracker" data-route="tracker">Tracker</a>
+    <a href="#/portfolio" data-route="portfolio">Portfolio</a>
+  </nav>
   <div class="search">
     <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
     <label class="sr" for="q">Search tokens</label>
-    <input id="q" placeholder="Search a token or paste a mint" autocomplete="off" spellcheck="false" role="combobox" aria-controls="results" aria-expanded="false">
+    <input class="inp" id="q" placeholder="Search token or paste mint" autocomplete="off" spellcheck="false" role="combobox" aria-controls="results" aria-expanded="false">
+    <kbd>/</kbd>
     <ul class="results" id="results" role="listbox" hidden></ul>
   </div>
   <div class="right">
-    <button class="btn primary" id="connect" type="button">Connect wallet</button>
+    <span class="chip solchip" id="solprice" title="SOL price">SOL —</span>
+    <label class="qb-amt" title="Quick-buy amount for ⚡ buttons"><span>⚡</span><input id="qbamt" inputmode="decimal" aria-label="Quick-buy amount in SOL"><span>SOL</span></label>
+    <button class="btn" id="walletbtn" type="button">Connect</button>
+    <button class="btn" id="settingsbtn" type="button" aria-label="Settings">⚙</button>
   </div>
-  <div class="wallet-menu" id="wallet-menu" hidden></div>
 </header>
+<div class="watchbar" id="watchbar"></div>
 
-<main class="grid">
-  <div class="left">
-    <section class="panel" aria-label="Selected token">
-      <div class="token-head">
-        <div class="token-id">
-          <img class="tok-icon" id="t-icon" alt="" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
-          <div>
-            <h1 id="t-sym">Pick a token</h1>
-            <button class="mint" id="t-mint" type="button" title="Copy mint address">Search above, or pick from the list below</button>
+<main>
+  <section class="view" id="v-pulse" hidden>
+    <div class="pulse-top">
+      <h1>Pulse</h1>
+      <span class="chip" id="pp-status"><span class="dot"></span>pump.fun stream</span>
+      <span class="chip" id="curve-status"><span class="dot"></span>curves</span>
+      <span class="muted mono" style="font-size:.7rem">Hover a column to pause it · ⚡ buys with your quick-buy amount</span>
+      <div class="seg mob-cols" id="mobcols" role="group" aria-label="Column">
+        <button type="button" data-col="new" aria-pressed="true">New</button>
+        <button type="button" data-col="final" aria-pressed="false">Final stretch</button>
+        <button type="button" data-col="migrated" aria-pressed="false">Migrated</button>
+      </div>
+    </div>
+    <div class="pulse-cols">
+      <div class="panel pcol on" data-col="new"><div class="phead"><h2>New Pairs</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+        <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter New Pairs by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
+      <div class="panel pcol" data-col="final"><div class="phead"><h2>Final Stretch</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+        <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter Final Stretch by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
+      <div class="panel pcol" data-col="migrated"><div class="phead"><h2>Migrated</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+        <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter Migrated by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
+    </div>
+  </section>
+
+  <section class="view" id="v-trending" hidden>
+    <div class="panel">
+      <div class="phead"><h2>Trending</h2>
+        <div class="seg" id="tr-cat" role="group" aria-label="List"><button type="button" data-v="toptrending" aria-pressed="true">Trending</button><button type="button" data-v="toptraded" aria-pressed="false">Most traded</button><button type="button" data-v="toporganicscore" aria-pressed="false">Organic</button><button type="button" data-v="recent" aria-pressed="false">New pools</button></div>
+        <div class="seg" id="tr-int" role="group" aria-label="Interval"><button type="button" data-v="5m" aria-pressed="false">5m</button><button type="button" data-v="1h" aria-pressed="true">1h</button><button type="button" data-v="6h" aria-pressed="false">6h</button><button type="button" data-v="24h" aria-pressed="false">24h</button></div>
+        <span class="grow"></span><span class="muted mono" id="tr-note" style="font-size:.68rem"></span>
+      </div>
+      <div class="tscroll"><table id="tr-table"></table></div>
+    </div>
+  </section>
+
+  <section class="view tokview" id="v-token" hidden>
+    <div class="tok-main">
+      <div class="panel">
+        <div class="tok-head">
+          <div class="tok-id">
+            <img class="tok-icon" id="t-icon" alt="">
+            <div>
+              <h1><span id="t-sym">—</span><button class="star" id="t-star" type="button" aria-pressed="false" aria-label="Add to watchlist">★</button></h1>
+              <div class="sub"><span id="t-name"></span><button id="t-mint" type="button" title="Copy mint address"></button><span id="t-links"></span></div>
+            </div>
+          </div>
+          <div class="stats">
+            <div class="stat"><span class="k">Price</span><span class="v" id="s-price">—</span></div>
+            <div class="stat"><span class="k">MC</span><span class="v" id="s-mcap">—</span></div>
+            <div class="stat"><span class="k">Liq</span><span class="v" id="s-liq">—</span></div>
+            <div class="stat"><span class="k">Vol 24h</span><span class="v" id="s-vol">—</span></div>
+            <div class="stat"><span class="k">5m</span><span class="v" id="s-c5">—</span></div>
+            <div class="stat"><span class="k">1h</span><span class="v" id="s-c1">—</span></div>
+            <div class="stat"><span class="k">24h</span><span class="v" id="s-c24">—</span></div>
           </div>
         </div>
-        <div class="stats">
-          <div class="stat"><span class="k">Price</span><span class="v" id="s-price">—</span></div>
-          <div class="stat"><span class="k">24h</span><span class="v" id="s-chg">—</span></div>
-          <div class="stat"><span class="k">Mkt cap</span><span class="v" id="s-mcap">—</span></div>
-          <div class="stat"><span class="k">Liquidity</span><span class="v" id="s-liq">—</span></div>
-          <div class="stat"><span class="k">Vol 24h</span><span class="v" id="s-vol">—</span></div>
-        </div>
+        <div class="chart" id="chart"><div class="empty">Loading chart…</div></div>
+        <div class="curvebar" id="curvebar" hidden><span>Bonding curve</span><div class="pbar"><i></i></div><span id="curvepct"></span></div>
       </div>
-      <div class="chart" id="chart"><div class="empty">Chart loads when you pick a token.</div></div>
-    </section>
+      <div class="panel">
+        <div class="tablist" role="tablist" aria-label="Token data">
+          <button role="tab" type="button" aria-selected="true" aria-controls="tp-trades" id="tt-trades">Trades</button>
+          <button role="tab" type="button" aria-selected="false" aria-controls="tp-holders" id="tt-holders">Holders</button>
+          <button role="tab" type="button" aria-selected="false" aria-controls="tp-mine" id="tt-mine">My trades</button>
+        </div>
+        <div class="tabpanel" role="tabpanel" id="tp-trades" aria-labelledby="tt-trades"></div>
+        <div class="tabpanel" role="tabpanel" id="tp-holders" aria-labelledby="tt-holders" hidden></div>
+        <div class="tabpanel" role="tabpanel" id="tp-mine" aria-labelledby="tt-mine" hidden></div>
+      </div>
+    </div>
+    <aside class="tok-side">
+      <div class="panel trade" aria-label="Trade">
+        <div class="seg" role="group" aria-label="Side"><button type="button" class="b" id="side-buy" aria-pressed="true">Buy</button><button type="button" class="s" id="side-sell" aria-pressed="false">Sell</button></div>
+        <div class="from"><span>Trade from</span><div class="seg" id="fromseg" role="group" aria-label="Trading wallet"><button type="button" data-w="main" aria-pressed="true">Main</button><button type="button" data-w="instant" aria-pressed="false">⚡ Instant</button></div></div>
+        <div class="from"><label for="amt" id="amt-label">Amount</label><button type="button" class="btn small" id="bal">Bal —</button></div>
+        <div class="amount"><input id="amt" inputmode="decimal" placeholder="0.0" autocomplete="off"><span class="unit" id="amt-unit">SOL</span></div>
+        <div class="quick" id="quick"></div>
+        <div class="presets" id="presets" role="group" aria-label="Trade presets"></div>
+        <div class="ghost-toggle" id="ghost-box">
+          <div><b>Ghost mode<span class="tag">BETA</span></b><span id="ghost-sub">Buy from a fresh wallet via NEAR Intents</span></div>
+          <button class="switch" id="ghost-switch" type="button" role="switch" aria-checked="false" aria-label="Ghost mode"></button>
+        </div>
+        <ol class="gsteps" id="gsteps" hidden><li>Fund the route from your wallet</li><li>NEAR Intents pays a fresh ghost wallet</li><li>Ghost wallet buys</li></ol>
+        <div class="quote" id="quote" hidden></div>
+        <button class="btn primary go" id="go" type="button">Connect wallet</button>
+        <p class="status" id="status" aria-live="polite"></p>
+        <p class="fine" id="fine"></p>
+      </div>
+      <div class="panel audit" id="audit"><h3>Token info</h3><span class="muted">Loading…</span></div>
+    </aside>
+  </section>
 
-    <section class="panel tabs">
-      <div class="tablist" role="tablist" aria-label="Account">
-        <button role="tab" id="tab-pos" aria-controls="p-pos" aria-selected="true">Positions</button>
-        <button role="tab" id="tab-act" aria-controls="p-act" aria-selected="false">Activity</button>
-        <button role="tab" id="tab-ghost" aria-controls="p-ghost" aria-selected="false">Ghost</button>
-        <button role="tab" id="tab-exp" aria-controls="p-exp" aria-selected="false">Exposure</button>
-      </div>
-      <div class="tabpanel" role="tabpanel" id="p-pos" aria-labelledby="tab-pos"><p class="muted">Connect a wallet to see what you hold.</p></div>
-      <div class="tabpanel" role="tabpanel" id="p-act" aria-labelledby="tab-act" hidden><p class="muted">Trades you make here show up in this list.</p></div>
-      <div class="tabpanel" role="tabpanel" id="p-ghost" aria-labelledby="tab-ghost" hidden>
-        <div class="expo-head">
-          <span class="muted" id="g-head">Ghost wallets are rebuilt from one signature of your wallet. Unlock them to see balances, sell and exit.</span>
-          <button class="btn quiet" id="g-unlock" type="button">Unlock ghost wallets</button>
-        </div>
-        <div class="ghost-list" id="g-list"></div>
-      </div>
-      <div class="tabpanel" role="tabpanel" id="p-exp" aria-labelledby="tab-exp" hidden>
-        <div class="expo-head">
-          <span class="score" id="x-score">—</span>
-          <span class="muted" id="x-grade">What trackers can link to your wallet</span>
-          <button class="btn quiet" id="x-run" type="button">Trace my wallet</button>
-        </div>
-        <ul class="findings" id="x-list"></ul>
-      </div>
-    </section>
-  </div>
+  <section class="view two" id="v-tracker" hidden>
+    <div class="panel">
+      <div class="phead"><h2>Tracked wallets</h2></div>
+      <form class="form" id="tk-form" autocomplete="off">
+        <input class="inp" id="tk-addr" placeholder="Wallet address" spellcheck="false" aria-label="Wallet address to track">
+        <div style="display:flex;gap:6px"><input class="inp" id="tk-label" placeholder="Label, e.g. Whale 1" style="flex:1" aria-label="Label"><button class="btn primary" type="submit">Track</button></div>
+      </form>
+      <ul class="wl" id="tk-list"></ul>
+    </div>
+    <div class="panel">
+      <div class="phead"><h2>Live trades</h2><span class="chip" id="tk-status"><span class="dot"></span>idle</span><span class="grow"></span><span class="muted mono" style="font-size:.68rem">Checks each wallet every 20s through your RPC</span></div>
+      <div class="tscroll"><table id="tk-feed"></table></div>
+    </div>
+  </section>
 
-  <aside class="panel trade" aria-label="Trade">
-    <div class="trade-tok" id="trade-tok" aria-hidden="true"></div>
-    <div class="seg" role="group" aria-label="Side">
-      <button type="button" class="buy" id="side-buy" aria-pressed="true">Buy</button>
-      <button type="button" class="sell" id="side-sell" aria-pressed="false">Sell</button>
+  <section class="view" id="v-portfolio" hidden>
+    <div class="cards" id="pf-cards"></div>
+    <div class="panel" style="margin-bottom:10px">
+      <div class="phead"><h2>Positions</h2><div class="seg" id="pf-wallet" role="group" aria-label="Wallet"><button type="button" data-w="main" aria-pressed="true">Main</button><button type="button" data-w="instant" aria-pressed="false">⚡ Instant</button></div><span class="grow"></span><span class="muted mono" style="font-size:.66rem">PnL counts trades made in this terminal, at average cost and current prices</span></div>
+      <div class="tscroll"><table id="pf-table"></table></div>
     </div>
-    <div class="field">
-      <div class="field-top"><label for="amt" id="amt-label">You pay</label><button type="button" id="bal">Balance —</button></div>
-      <div class="amount"><input id="amt" inputmode="decimal" placeholder="0.0" autocomplete="off"><span class="unit" id="amt-unit">SOL</span></div>
-      <div class="quick" id="quick"></div>
+    <div class="panel" style="margin-bottom:10px">
+      <div class="phead"><h2>Ghost wallets</h2><span class="grow"></span><button class="btn small" id="g-unlock" type="button">Unlock ghost wallets</button></div>
+      <div style="padding:10px;display:grid;gap:8px" id="g-list"><span class="muted mono" style="font-size:.72rem">Ghost wallets are rebuilt from one signature of your wallet. Unlock to see them.</span></div>
     </div>
-    <div class="row"><span class="k">Slippage</span><div class="slip" id="slip"></div></div>
-    <div class="ghost-toggle" id="ghost-box">
-      <div><b>Ghost mode<span class="soon">BETA</span></b><span id="ghost-sub">Buy from a fresh wallet, routed through NEAR Intents</span></div>
-      <button class="switch" id="ghost-switch" type="button" role="switch" aria-checked="false" aria-label="Ghost mode"></button>
+    <div class="panel" style="margin-bottom:10px">
+      <div class="phead"><h2>Exposure</h2><span class="muted mono" id="x-grade" style="font-size:.7rem">What trackers can link to your main wallet</span><span class="grow"></span><span class="mono" id="x-score" style="font-weight:700">—</span><button class="btn small" id="x-run" type="button">Trace my wallet</button></div>
+      <ul class="wl" id="x-list"></ul>
     </div>
-    <ol class="gsteps" id="gsteps" hidden>
-      <li>Fund the route from your wallet</li>
-      <li>NEAR Intents pays a fresh ghost wallet</li>
-      <li>Ghost wallet buys</li>
-    </ol>
-    <div class="quote" id="quote" hidden></div>
-    <button class="btn primary go" id="go" type="button">Connect wallet</button>
-    <p class="status" id="status" aria-live="polite"></p>
-    <p class="fine" id="fine"></p>
-  </aside>
+    <div class="panel">
+      <div class="phead"><h2>Activity</h2></div>
+      <div class="tscroll"><table id="pf-act"></table></div>
+    </div>
+  </section>
 </main>
 
+<dialog id="modal" aria-labelledby="m-title"><div class="mhead"><h2 id="m-title"></h2><button class="btn small" id="m-close" type="button">Close</button></div><div class="mbody" id="m-body"></div></dialog>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
 <script src="./vendor/solana-web3.min.js"></script>
-<script type="module">
-import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE } from "./config.js";
-import { GHOST_MESSAGE, GhostError, deriveGhost, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
-import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError } from "./swap.js";
-import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
-
-const web3 = window.solanaWeb3;
-const $ = id => document.getElementById(id);
-const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-/* ---------- pixel brand ---------- */
-const FONT = {
-  G:[".###.","#...#","#....","#.###","#...#","#...#",".###."], H:["#...#","#...#","#...#","#####","#...#","#...#","#...#"],
-  O:[".###.","#...#","#...#","#...#","#...#","#...#",".###."], S:[".####","#....","#....",".###.","....#","....#","####."],
-  T:["#####","..#..","..#..","..#..","..#..","..#..","..#.."], P:["####.","#...#","#...#","####.","#....","#....","#...."],
-  R:["####.","#...#","#...#","####.","#.#..","#..#.","#...#"], I:["###",".#.",".#.",".#.",".#.",".#.","###"], N:["#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"]
-};
-const GHOST = ["...####...",".########.","##########","##..##..##","##..##..##","##########","##########","###....###","##########","##########","##.##.##.#","#..#..#..#"];
-function pixelSVG(rows, cls) {
-  const NS = "http://www.w3.org/2000/svg", cell = 10, gap = 1.4, w = Math.max(...rows.map(r => r.length));
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", `0 0 ${w*cell} ${rows.length*cell}`); svg.setAttribute("aria-hidden", "true"); svg.setAttribute("class", cls);
-  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c !== "#") return; const e = document.createElementNS(NS, "rect"); for (const [k, v] of Object.entries({ x: x*cell + gap/2, y: y*cell + gap/2, width: cell - gap, height: cell - gap, fill: "currentColor" })) e.setAttribute(k, v); svg.appendChild(e); }));
-  return svg;
-}
-document.querySelectorAll("[data-pixel]").forEach(h => {
-  const rows = h.dataset.pixel === "ghost" ? GHOST : (() => { const r = Array(7).fill(""); [..."GHOSTPRINT"].forEach((ch, i) => FONT[ch].forEach((row, y) => { r[y] += (i ? "." : "") + row; })); return r; })();
-  h.replaceWith(pixelSVG(rows, h.getAttribute("class")));
-});
-
-/* ---------- services ---------- */
-const RPC_KEY = "ghostprint-rpc";
-const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
-const rpcUrl = (() => { const v = (store.get(RPC_KEY) || "").trim(); return /^https?:\/\/\S+$/.test(v) ? v : DEFAULT_RPC; })();
-const connection = new web3.Connection(rpcUrl, "confirmed");
-const jup = jupiter({ base: JUP_BASE, apiKey: JUP_API_KEY, minInterval: JUP_API_KEY ? 1050 : 2050 });
-
-/* ---------- formatting ---------- */
-const usd = n => n == null || !isFinite(n) ? "—" : n >= 1e9 ? `$${(n/1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n/1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n/1e3).toFixed(1)}K` : `$${n.toFixed(2)}`;
-const SUB = "₀₁₂₃₄₅₆₇₈₉";
-// $0.0₄2131 style for tiny prices: the subscript counts the zeros after the decimal point
-const price = n => {
-  if (n == null || !isFinite(n) || n <= 0) return "—";
-  if (n >= 1) return `$${n.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
-  if (n >= 0.001) return `$${n.toPrecision(4)}`;
-  let zeros = -Math.floor(Math.log10(n)) - 1, digits = Math.round(n * 10 ** (zeros + 4));
-  if (digits >= 10000) { zeros--; digits = Math.round(n * 10 ** (zeros + 4)); } // rounding carried into another digit
-  return `$0.0${String(zeros).split("").map(d => SUB[d]).join("")}${digits}`;
-};
-const pct = n => n == null || !isFinite(n) ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
-const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
-const safeIcon = (img, url) => { img.onerror = () => { img.onerror = null; img.src = BLANK; }; img.src = typeof url === "string" && /^https:\/\//.test(url) ? url : BLANK; };
-const text = (el, s) => { el.textContent = s; return el; };
-const make = (tag, cls, s) => { const e = document.createElement(tag); if (cls) e.className = cls; if (s !== undefined) e.textContent = s; return e; };
-
-/* ---------- state ---------- */
-const S = { token: null, side: "buy", slippage: DEFAULT_SLIPPAGE_BPS, wallet: null, sol: null, tokenBal: null, solUsd: null, busy: false, quoteTimer: 0, quoteSeq: 0, ghost: false, seed: null };
-
-/* ---------- token search ---------- */
-const q = $("q"), results = $("results");
-let searchTimer = 0, searchSeq = 0, hits = [];
-q.addEventListener("input", () => { clearTimeout(searchTimer); const v = q.value.trim(); if (!v) return closeResults(); searchTimer = setTimeout(() => search(v), 450); });
-q.addEventListener("keydown", e => {
-  const items = [...results.querySelectorAll("button")], i = items.findIndex(b => b.getAttribute("aria-selected") === "true");
-  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); const n = items[(i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]; items.forEach(b => b.setAttribute("aria-selected", b === n)); n && n.scrollIntoView({ block: "nearest" }); }
-  else if (e.key === "Enter") { e.preventDefault(); (items[i] || items[0])?.click(); }
-  else if (e.key === "Escape") closeResults();
-});
-document.addEventListener("click", e => { if (!e.target.closest(".search")) closeResults(); if (!e.target.closest("#wallet-menu,#connect")) $("wallet-menu").hidden = true; });
-function closeResults() { results.hidden = true; q.setAttribute("aria-expanded", "false"); }
-async function search(v) {
-  const seq = ++searchSeq;
-  results.textContent = ""; results.append(make("li", "note", "Searching…")); results.hidden = false; q.setAttribute("aria-expanded", "true");
-  try {
-    const list = await jup.search(v);
-    if (seq !== searchSeq) return;
-    hits = (Array.isArray(list) ? list : []).filter(t => t && t.id && t.id !== SOL_MINT).slice(0, 12);
-    results.textContent = "";
-    if (!hits.length) { results.append(make("li", "note", "No tokens found.")); return; }
-    for (const t of hits) {
-      const li = make("li"), b = make("button"), img = make("img", "tok-icon"), mid = make("div"), num = make("div", "num");
-      b.type = "button"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", "false"); img.alt = "";
-      safeIcon(img, t.icon);
-      mid.append(make("div", "sym", `${t.symbol || "?"}${t.isVerified ? " ✓" : ""}`), make("div", "nm", `${t.name || ""} · ${short(t.id)}`));
-      num.append(make("div", "", price(t.usdPrice)), make("div", "", usd(t.mcap)));
-      b.append(img, mid, num);
-      b.addEventListener("click", () => { closeResults(); q.value = ""; selectToken(t); });
-      li.append(b); results.append(li);
-    }
-  } catch (err) { if (seq === searchSeq) { results.textContent = ""; results.append(make("li", "note", err.message)); } }
-}
-
-/* ---------- selected token ---------- */
-async function selectToken(t) {
-  S.token = { id: t.id, symbol: t.symbol || short(t.id), name: t.name || "", decimals: null, icon: t.icon };
-  // Amounts are only safe with the mint's real decimals, so read them from the chain before trading.
-  const tok = S.token;
-  connection.getParsedAccountInfo(new web3.PublicKey(t.id)).then(r => {
-    const d = r.value?.data?.parsed?.info?.decimals;
-    if (S.token !== tok) return;
-    if (Number.isInteger(d)) { tok.decimals = d; renderSide(); scheduleQuote(); }
-    else setStatus("This address isn't a token mint.", "err");
-  }).catch(() => { if (S.token === tok) setStatus("Couldn't read this token from the RPC node.", "err"); });
-  try { history.replaceState(null, "", `#${t.id}`); } catch (_) {}
-  text($("t-sym"), S.token.symbol); text($("t-mint"), `${S.token.name ? S.token.name + " · " : ""}${short(t.id)} ⧉`);
-  safeIcon($("t-icon"), t.icon);
-  renderStats({ price: t.usdPrice, change: t.stats24h?.priceChange, mcap: t.mcap, liq: t.liquidity, vol: null });
-  document.title = `${S.token.symbol} · Ghostprint Terminal`;
-  renderSide(); refreshTokenBalance(); loadChart(t.id);
-}
-$("t-mint").addEventListener("click", async () => { if (!S.token) return q.focus(); try { await navigator.clipboard.writeText(S.token.id); setStatus("Mint address copied."); } catch (_) {} });
-function renderStats(s) {
-  text($("s-price"), price(s.price));
-  const tt = $("trade-tok"); tt.textContent = "";
-  if (S.token) { const img = make("img", "tok-icon"); img.alt = ""; safeIcon(img, S.token.icon); tt.append(img, make("span", "", S.token.symbol), make("span", "p", price(s.price))); }
-  const c = $("s-chg"); text(c, pct(s.change)); c.className = "v " + (s.change > 0 ? "up" : s.change < 0 ? "down" : "");
-  text($("s-mcap"), usd(s.mcap)); text($("s-liq"), usd(s.liq)); text($("s-vol"), usd(s.vol));
-}
-
-// Chart and live stats come from DexScreener's most liquid pool for the token.
-async function loadChart(mint) {
-  const box = $("chart");
-  box.textContent = ""; box.append(make("div", "empty", "Loading chart…"));
-  try {
-    const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`);
-    const pairs = res.ok ? await res.json() : [];
-    if (!S.token || S.token.id !== mint) return;
-    const best = (Array.isArray(pairs) ? pairs : []).filter(p => p.chainId === "solana" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(p.pairAddress || "")).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
-    if (!best) { box.firstChild.textContent = "No trading pool found for this token yet."; return; }
-    renderStats({ price: Number(best.priceUsd), change: best.priceChange?.h24, mcap: best.marketCap ?? best.fdv, liq: best.liquidity?.usd, vol: best.volume?.h24 });
-    const f = document.createElement("iframe");
-    f.title = `${S.token.symbol} price chart`; f.loading = "lazy";
-    f.src = `https://dexscreener.com/solana/${best.pairAddress}?embed=1&theme=dark&trades=0&info=0`;
-    box.textContent = ""; box.append(f);
-  } catch (_) { box.firstChild.textContent = "Chart unavailable right now."; }
-}
-
-/* ---------- wallet ---------- */
-function providers() {
-  const w = window, out = [];
-  if (w.phantom?.solana?.isPhantom) out.push({ name: "Phantom", p: w.phantom.solana });
-  if (w.solflare?.isSolflare) out.push({ name: "Solflare", p: w.solflare });
-  if (w.backpack?.isBackpack) out.push({ name: "Backpack", p: w.backpack });
-  if (!out.length && w.solana) out.push({ name: "Wallet", p: w.solana });
-  return out;
-}
-const menu = $("wallet-menu");
-function openMenu(nodes) { menu.textContent = ""; menu.append(...nodes); menu.hidden = false; }
-$("connect").addEventListener("click", () => {
-  if (S.wallet) {
-    const copy = make("button", "", "Copy address"), out = make("button", "", "Disconnect");
-    copy.onclick = async () => { try { await navigator.clipboard.writeText(S.wallet.pk); } catch (_) {} menu.hidden = true; };
-    out.onclick = disconnect;
-    return openMenu([make("p", "", S.wallet.pk), copy, out]);
-  }
-  const list = providers();
-  if (!list.length) {
-    const links = [["Phantom", "https://phantom.com/download"], ["Solflare", "https://solflare.com/download"], ["Backpack", "https://backpack.app/downloads"]].map(([n, u]) => { const a = make("a", "", `Get ${n} ↗`); a.href = u; a.target = "_blank"; a.rel = "noopener"; return a; });
-    return openMenu([make("p", "", "No Solana wallet found in this browser."), ...links]);
-  }
-  if (list.length === 1) return connect(list[0]);
-  openMenu(list.map(w => { const b = make("button", "", w.name); b.onclick = () => connect(w); return b; }));
-});
-async function connect(w) {
-  menu.hidden = true;
-  try {
-    const r = await w.p.connect();
-    const pk = (r && r.publicKey ? r.publicKey : w.p.publicKey).toString();
-    S.wallet = { name: w.name, p: w.p, pk };
-    w.p.on?.("accountChanged", next => { if (next) { S.wallet.pk = next.toString(); onWallet(); } else disconnect(); });
-    onWallet();
-  } catch (e) { setStatus(e && e.code === 4001 ? "Connection cancelled in wallet." : "Couldn't connect to the wallet.", "err"); }
-}
-async function disconnect() {
-  menu.hidden = true;
-  try { await S.wallet?.p.disconnect?.(); } catch (_) {}
-  S.wallet = null; S.sol = S.tokenBal = null; S.seed = null; renderGhosts();
-  text($("connect"), "Connect wallet"); $("connect").className = "btn primary";
-  $("p-pos").textContent = ""; $("p-pos").append(make("p", "muted", "Connect a wallet to see what you hold."));
-  renderSide();
-}
-function onWallet() {
-  $("connect").className = "btn quiet";
-  text($("connect"), short(S.wallet.pk));
-  refreshBalances(); renderActivity();
-  if (exposureFor !== S.wallet.pk) resetExposure();
-}
-async function refreshBalances() {
-  if (!S.wallet) return;
-  try {
-    S.sol = BigInt(await connection.getBalance(new web3.PublicKey(S.wallet.pk)));
-    text($("connect"), `${short(S.wallet.pk)} · ${fromRaw(S.sol, 9, 3)} SOL`);
-  } catch (_) { setStatus("Couldn't read your balance from the RPC node.", "err"); }
-  await refreshTokenBalance(); renderSide(); loadPositions();
-}
-async function refreshTokenBalance() {
-  S.tokenBal = null;
-  if (!S.wallet || !S.token) return;
-  try {
-    const r = await connection.getParsedTokenAccountsByOwner(new web3.PublicKey(S.wallet.pk), { mint: new web3.PublicKey(S.token.id) });
-    S.tokenBal = r.value.reduce((n, a) => n + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
-  } catch (_) { S.tokenBal = 0n; }
-  renderSide();
-}
-
-/* ---------- positions ---------- */
-async function loadPositions() {
-  const host = $("p-pos");
-  if (!S.wallet) return;
-  try {
-    const owner = new web3.PublicKey(S.wallet.pk);
-    const progs = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
-    const accts = (await Promise.all(progs.map(p => connection.getParsedTokenAccountsByOwner(owner, { programId: new web3.PublicKey(p) }).then(r => r.value).catch(() => [])))).flat();
-    const held = new Map();
-    for (const a of accts) {
-      const i = a.account.data.parsed.info, amt = BigInt(i.tokenAmount.amount);
-      if (amt > 0n && i.mint !== SOL_MINT) { const h = held.get(i.mint) || { mint: i.mint, raw: 0n, decimals: i.tokenAmount.decimals }; h.raw += amt; held.set(i.mint, h); }
-    }
-    const mints = [...held.keys()].slice(0, 50);
-    const [prices, meta] = await Promise.all([jup.prices([SOL_MINT, ...mints]).catch(() => ({})), mints.length ? jup.search(mints.join(",")).catch(() => []) : []]);
-    S.solUsd = prices[SOL_MINT]?.usdPrice ?? S.solUsd;
-    const info = new Map((Array.isArray(meta) ? meta : []).map(t => [t.id, t]));
-    const rows = [...held.values()].map(h => { const p = prices[h.mint]?.usdPrice; const amt = Number(fromRaw(h.raw, h.decimals, 6)); return { ...h, amt, value: p ? p*amt : null, t: info.get(h.mint) }; })
-      .sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
-    host.textContent = "";
-    const tbl = make("table"), head = make("tr");
-    for (const [h, c] of [["Token"], ["Amount", "num"], ["Value", "num"]]) head.append(make("th", c, h));
-    const solRow = make("tr");
-    solRow.append(make("td", "", "SOL"), make("td", "num", S.sol != null ? fromRaw(S.sol, 9, 4) : "—"), make("td", "num", S.sol != null && S.solUsd ? usd(Number(fromRaw(S.sol, 9, 6))*S.solUsd) : "—"));
-    tbl.append(head, solRow);
-    for (const r of rows) {
-      const tr = make("tr", "pick"), cell = make("td"), wrap = make("div", "cell-tok"), img = make("img", "tok-icon");
-      img.alt = ""; safeIcon(img, r.t?.icon);
-      wrap.append(img, make("span", "", r.t?.symbol || short(r.mint))); cell.append(wrap);
-      tr.append(cell, make("td", "num", r.amt.toLocaleString(undefined, { maximumFractionDigits: 4 })), make("td", "num", usd(r.value)));
-      tr.addEventListener("click", () => selectToken(r.t || { id: r.mint }));
-      tbl.append(tr);
-    }
-    host.append(tbl);
-    if (!rows.length) host.append(make("p", "muted", "No tokens yet. Search one above to buy."));
-  } catch (_) { host.textContent = ""; host.append(make("p", "muted", "Couldn't load positions from the RPC node.")); }
-}
-
-/* ---------- trade panel ---------- */
-const amt = $("amt"), go = $("go"), quoteBox = $("quote");
-const SLIPS = [100, 300, 500, 1000];
-function renderSlip() {
-  const host = $("slip"); host.textContent = "";
-  for (const bps of SLIPS) { const b = make("button", "", `${bps/100}%`); b.type = "button"; b.setAttribute("aria-pressed", S.slippage === bps); b.onclick = () => { S.slippage = bps; renderSlip(); scheduleQuote(); }; host.append(b); }
-}
-function renderSide() {
-  const buy = S.side === "buy", sym = S.token?.symbol || "token";
-  $("side-buy").setAttribute("aria-pressed", buy); $("side-sell").setAttribute("aria-pressed", !buy);
-  text($("amt-label"), buy ? "You pay" : "You sell");
-  text($("amt-unit"), buy ? "SOL" : sym);
-  const bal = buy ? (S.sol != null ? `${fromRaw(S.sol, 9, 4)} SOL` : "—") : (S.tokenBal != null && S.token?.decimals != null ? `${fromRaw(S.tokenBal, S.token.decimals, 4)} ${sym}` : "—");
-  text($("bal"), `Balance ${bal}`);
-  const quick = $("quick"); quick.textContent = "";
-  const opts = buy ? [["0.1", "0.1"], ["0.5", "0.5"], ["1", "1"], ["2", "2"]] : [["25%", .25], ["50%", .5], ["75%", .75], ["Max", 1]];
-  for (const [label, v] of opts) {
-    const b = make("button", "", label); b.type = "button";
-    b.onclick = () => {
-      if (buy) amt.value = v;
-      else if (S.tokenBal != null && S.token?.decimals != null) amt.value = fromRaw(v === 1 ? S.tokenBal : (S.tokenBal * BigInt(Math.round(v*100))) / 100n, S.token.decimals, S.token.decimals);
-      scheduleQuote();
-    };
-    quick.append(b);
-  }
-  updateGo();
-}
-$("side-buy").onclick = () => { S.side = "buy"; amt.value = ""; quoteBox.hidden = true; renderSide(); };
-$("side-sell").onclick = () => { S.side = "sell"; amt.value = ""; quoteBox.hidden = true; renderSide(); };
-$("bal").onclick = () => {
-  if (S.side === "sell" && S.tokenBal != null && S.token?.decimals != null) amt.value = fromRaw(S.tokenBal, S.token.decimals, S.token.decimals);
-  else if (S.side === "buy" && S.sol != null) amt.value = fromRaw(S.sol > RESERVE ? S.sol - RESERVE : 0n, 9, 4);
-  scheduleQuote();
-};
-amt.addEventListener("input", () => { amt.value = amt.value.replace(/,/g, ".").replace(/[^\d.]/g, ""); scheduleQuote(); });
-
-const RESERVE = 5_000_000n; // keep 0.005 SOL for network fees and token account rent
-function amountRaw() {
-  if (!S.token || (S.side === "sell" && S.token.decimals == null)) return null;
-  return toRaw(amt.value, S.side === "buy" ? 9 : S.token.decimals);
-}
-function problem() {
-  if (!S.token) return "Pick a token";
-  if (S.token.decimals == null) return "Loading token…";
-  const raw = amountRaw();
-  if (!raw) return "Enter an amount";
-  if (S.ghost && S.side === "sell") return "Sell ghost buys from the Ghost tab";
-  if (S.ghost && raw > toRaw(String(GHOST_MAX_SOL), 9)) return `Ghost beta limit is ${GHOST_MAX_SOL} SOL`;
-  if (S.ghost && raw <= GHOST_GAS_RESERVE * 2n) return "Ghost buys start at 0.02 SOL";
-  if (!S.wallet) return null;
-  if (S.side === "buy" && S.sol != null && raw + RESERVE > S.sol) return "Not enough SOL";
-  if (S.side === "sell" && S.tokenBal != null && raw > S.tokenBal) return `Not enough ${S.token.symbol}`;
-  return null;
-}
-function updateGo() {
-  if (S.busy) return;
-  const p = problem();
-  go.disabled = !!p && !!S.wallet;
-  text(go, !S.wallet ? "Connect wallet" : p || `${S.ghost ? "Ghost buy" : S.side === "buy" ? "Buy" : "Sell"} ${S.token.symbol}`);
-  go.className = "btn go " + (!S.wallet || !p ? "primary" : "quiet");
-  text($("fine"), S.ghost
-    ? `Ghost: ${FEE_BPS/100}% fee from your wallet, NEAR Intents routing fee, then the ghost buys through Jupiter. Funding and exit amounts and timing can still be matched, so vary them and don't exit right away.`
-    : `${FEE_BPS/100}% fee in SOL per trade · routed by Jupiter · you sign every transaction in your own wallet`);
-}
-
-// A preview quote while typing. The real one is fetched again when you press the button.
-function scheduleQuote() {
-  updateGo(); clearTimeout(S.quoteTimer);
-  const raw = amountRaw();
-  if (!S.token || !raw) { quoteBox.hidden = true; return; }
-  S.quoteTimer = setTimeout(previewQuote, 650);
-}
-async function previewQuote() {
-  const seq = ++S.quoteSeq, raw = amountRaw();
-  if (!raw || S.token.decimals == null) return;
-  const buy = S.side === "buy", fee = buy ? (raw * BigInt(FEE_BPS)) / 10000n : null;
-  const spend = buy ? raw - fee - (S.ghost ? GHOST_GAS_RESERVE : 0n) : raw;
-  if (spend <= 0n) return;
-  try {
-    const qt = await jup.quote({ inputMint: buy ? SOL_MINT : S.token.id, outputMint: buy ? S.token.id : SOL_MINT, amount: spend, slippageBps: S.slippage });
-    if (seq !== S.quoteSeq) return;
-    renderQuote(qt, buy ? fee : (BigInt(qt.otherAmountThreshold) * BigInt(FEE_BPS)) / 10000n);
-  } catch (err) { if (seq === S.quoteSeq) { quoteBox.hidden = false; quoteBox.textContent = ""; quoteBox.append(make("div", "row", err.message)); } }
-}
-function renderQuote(qt, fee) {
-  const buy = S.side === "buy", outDec = buy ? S.token.decimals : 9, outSym = buy ? S.token.symbol : "SOL";
-  const route = (qt.routePlan || []).map(r => r.swapInfo?.label).filter(Boolean);
-  const rows = [
-    ["You get ≈", `${fromRaw(qt.outAmount, outDec, 4)} ${outSym}`],
-    ["Minimum", `${fromRaw(qt.otherAmountThreshold, outDec, 4)} ${outSym}`],
-    ["Price impact", `${(Number(qt.priceImpactPct || 0)*100).toFixed(2)}%`],
-    ["Route", [...new Set(route)].slice(0, 3).join(" → ") || "—"],
-    [`Fee ${FEE_BPS/100}%`, `${fromRaw(fee, 9, 6)} SOL`],
-    ...(S.ghost && buy ? [["Ghost route", "NEAR Intents → fresh wallet, + 0.01 SOL kept for gas"]] : [])
-  ];
-  quoteBox.textContent = "";
-  for (const [k, v] of rows) { const r = make("div", "row"); r.append(make("span", "k", k), make("span", "", v)); quoteBox.append(r); }
-  quoteBox.hidden = false;
-}
-
-function setStatus(msg, cls = "", link) {
-  const st = $("status"); st.textContent = msg; st.className = "status " + cls;
-  if (link) { st.append(" "); const a = make("a", "", "View on Solscan ↗"); a.href = `https://solscan.io/tx/${link}`; a.target = "_blank"; a.rel = "noopener"; st.append(a); }
-}
-
-go.addEventListener("click", async () => {
-  if (!S.wallet) return $("connect").click();
-  if (S.busy || problem()) return;
-  if (S.ghost && S.side === "buy") return ghostBuy();
-  const buy = S.side === "buy", raw = amountRaw(), sym = S.token.symbol;
-  S.busy = true; go.disabled = true; text(go, "Preparing…"); setStatus("Getting the best route from Jupiter…");
-  try {
-    const prep = await prepareSwap({ web3, jup, connection, side: S.side, mint: S.token.id, amountRaw: raw, user: S.wallet.pk, treasury: TREASURY, feeBps: FEE_BPS, slippageBps: S.slippage, priorityMaxLamports: PRIORITY_MAX_LAMPORTS });
-    renderQuote(prep.quote, prep.fee);
-    text(go, "Approve in wallet…"); setStatus(`Approve the ${buy ? "buy" : "sell"} in ${S.wallet.name}.`);
-    const signed = await S.wallet.p.signTransaction(prep.tx);
-    text(go, "Sending…"); setStatus("Sending to the network…");
-    const sig = await sendAndConfirm(connection, signed, prep.lastValidBlockHeight, { onStatus: s => s.state === "sent" && setStatus("Sent. Waiting for confirmation…", "", s.sig) });
-    const out = fromRaw(prep.quote.outAmount, buy ? S.token.decimals : 9, 4);
-    setStatus(`${buy ? "Bought" : "Sold"} ${buy ? `≈${out} ${sym}` : `${amt.value} ${sym} for ≈${out} SOL`}.`, "ok", sig);
-    logActivity({ sig, side: S.side, sym, mint: S.token.id, amount: amt.value, out, time: Date.now() });
-    amt.value = ""; quoteBox.hidden = true;
-    refreshBalances();
-  } catch (e) {
-    const rejected = e && (e.code === 4001 || /reject|cancel|denied/i.test(e.message || ""));
-    setStatus(rejected ? "Cancelled in wallet. Nothing was sent." : e instanceof SwapError ? e.message : `Something went wrong: ${(e && e.message || e).toString().slice(0, 140)}`, "err");
-  } finally { S.busy = false; updateGo(); }
-});
-
-/* ---------- ghost mode ---------- */
-const oc = oneclick({ jwt: ONECLICK_JWT });
-let solAsset = null;
-const GKEY = pk => `ghostprint-ghosts-${pk}`, FKEY = pk => `ghostprint-ghostfp-${pk}`;
-const ghostRecords = () => { try { return JSON.parse(store.get(GKEY(S.wallet.pk)) || "[]"); } catch (_) { return []; } };
-function saveGhost(rec) { const list = ghostRecords().filter(g => g.index !== rec.index); list.push(rec); list.sort((a, b) => a.index - b.index); store.set(GKEY(S.wallet.pk), JSON.stringify(list)); }
-const ROUTE_LABEL = { PENDING_DEPOSIT: "waiting for the deposit", KNOWN_DEPOSIT_TX: "deposit seen", INCOMPLETE_DEPOSIT: "deposit incomplete", PROCESSING: "routing privately", SUCCESS: "delivered" };
-
-$("ghost-switch").addEventListener("click", () => {
-  S.ghost = !S.ghost;
-  $("ghost-switch").setAttribute("aria-checked", S.ghost);
-  $("ghost-box").classList.toggle("on", S.ghost);
-  if (S.ghost && S.side === "sell") { S.side = "buy"; amt.value = ""; }
-  renderSide(); scheduleQuote();
-});
-
-// One signature of a fixed message rebuilds every ghost wallet. It stays in memory for this tab only.
-async function ghostSeed() {
-  if (S.seed) return S.seed;
-  if (!S.wallet.p.signMessage) throw new GhostError(`${S.wallet.name} can't sign messages, which Ghost mode needs. Try Phantom, Solflare or Backpack.`);
-  const r = await S.wallet.p.signMessage(new TextEncoder().encode(GHOST_MESSAGE), "utf8");
-  const sig = r instanceof Uint8Array ? r : r.signature;
-  if (!sig || sig.length !== 64) throw new GhostError("The wallet returned an unexpected signature.");
-  const fp = await seedFingerprint(sig), known = store.get(FKEY(S.wallet.pk));
-  if (known && known !== fp) throw new GhostError("This wallet signed differently than last time, so it would open different ghost wallets. Use the same wallet app as before, or export ghost keys from the device you used.");
-  store.set(FKEY(S.wallet.pk), fp);
-  return (S.seed = sig);
-}
-function steps(n) { [...$("gsteps").children].forEach((li, i) => { li.className = i < n ? "done" : i === n ? "active" : ""; }); $("gsteps").hidden = n < 0; }
-async function waitForSol(pk, min = 1n, ms = 90000) {
-  const until = Date.now() + ms;
-  for (;;) {
-    const b = BigInt(await connection.getBalance(new web3.PublicKey(pk)));
-    if (b >= min) return b;
-    if (Date.now() > until) throw new GhostError("NEAR Intents reported delivery but the ghost wallet hasn't received SOL yet. Check the Ghost tab in a minute.");
-    await new Promise(r => setTimeout(r, 2500));
-  }
-}
-async function signAndSend(tx, signer) {
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-  tx.message.recentBlockhash = blockhash;
-  const signed = signer ? (tx.sign([signer]), tx) : await S.wallet.p.signTransaction(tx);
-  return sendAndConfirm(connection, signed, lastValidBlockHeight);
-}
-
-async function ghostBuy() {
-  const raw = amountRaw(), sym = S.token.symbol, mint = S.token.id, decimals = S.token.decimals, main = S.wallet.pk;
-  S.busy = true; go.disabled = true;
-  let rec = null;
-  try {
-    text(go, "Sign in wallet…"); setStatus("Sign the Ghost message so the terminal can open a fresh ghost wallet. It sends nothing.");
-    const seed = await ghostSeed();
-    const index = ghostRecords().reduce((m, g) => Math.max(m, g.index + 1), 0);
-    const ghost = await deriveGhost(web3, seed, index), gpk = ghost.publicKey.toBase58();
-    const fee = (raw * BigInt(FEE_BPS)) / 10000n, routeAmount = raw - fee;
-    steps(0); text(go, "Routing…"); setStatus("Getting a private route from NEAR Intents…");
-    solAsset = solAsset || await oc.tokens().then(solAssetId).catch(() => undefined);
-    const { quote, confidential } = await routeQuote({ oc, asset: solAsset, amount: routeAmount, from: main, to: gpk, confidentiality: GHOST_CONFIDENTIALITY });
-    rec = { index, address: gpk, mint, symbol: sym, decimals, state: "funding", depositAddress: quote.depositAddress, confidential, createdAt: Date.now() };
-    saveGhost(rec);
-    text(go, "Approve in wallet…"); setStatus(`Approve sending ${fromRaw(raw, 9, 4)} SOL into ${confidential ? "a Confidential Intents" : "a NEAR Intents"} route.`);
-    const { blockhash } = await connection.getLatestBlockhash("confirmed");
-    const fsig = await signAndSend(fundingTx(web3, { from: main, depositAddress: quote.depositAddress, amount: routeAmount, fee, treasury: TREASURY, blockhash }));
-    oc.submitDeposit(fsig, quote.depositAddress).catch(() => {});
-    saveGhost({ ...rec, state: "routing", fundingSig: fsig });
-    steps(1); text(go, "Routing privately…");
-    await waitForRoute(oc, quote.depositAddress, { onStatus: s => setStatus(`NEAR Intents: ${ROUTE_LABEL[s] || s.toLowerCase()}${confidential ? " (confidential)" : ""}…`) });
-    const bal = await waitForSol(gpk, GHOST_GAS_RESERVE + 1n);
-    saveGhost({ ...rec, state: "funded" });
-    steps(2); text(go, "Ghost buying…"); setStatus(`Ghost wallet #${index} received ${fromRaw(bal, 9, 4)} SOL. Buying ${sym}…`);
-    const prep = await prepareSwap({ web3, jup, connection, side: "buy", mint, amountRaw: bal - GHOST_GAS_RESERVE, user: gpk, treasury: TREASURY, feeBps: 0, slippageBps: S.slippage, priorityMaxLamports: PRIORITY_MAX_LAMPORTS });
-    prep.tx.sign([ghost]);
-    const bsig = await sendAndConfirm(connection, prep.tx, prep.lastValidBlockHeight);
-    saveGhost({ ...rec, state: "holding", buySig: bsig });
-    steps(3);
-    setStatus(`Ghost wallet #${index} bought ≈${fromRaw(prep.quote.outAmount, decimals, 4)} ${sym}. Nothing on-chain links it to your wallet.`, "ok", bsig);
-    logActivity({ sig: bsig, side: "buy", sym, mint, amount: fromRaw(raw, 9, 4), out: `${fromRaw(prep.quote.outAmount, decimals, 4)} (ghost #${index})`, time: Date.now() });
-    amt.value = ""; quoteBox.hidden = true;
-    refreshBalances(); renderGhosts();
-  } catch (e) {
-    const rejected = e && (e.code === 4001 || /reject|cancel|denied/i.test(e.message || ""));
-    setStatus(rejected ? "Cancelled in wallet. Nothing was sent." : (e && e.message) || "Ghost buy failed.", "err");
-    if (rec) setStatus(`${$("status").textContent} Ghost wallet #${rec.index} is in the Ghost tab if it received anything.`, "err");
-  } finally { S.busy = false; setTimeout(() => steps(-1), 8000); updateGo(); }
-}
-
-// Sell everything a ghost holds, then route all of its SOL back to the main wallet through NEAR Intents.
-async function ghostExit(index, row) {
-  if (S.busy) return;
-  S.busy = true;
-  const say = (m, cls = "") => { text(row.querySelector(".meta"), m); setStatus(m, cls); };
-  try {
-    const ghost = await deriveGhost(web3, await ghostSeed(), index), gpk = ghost.publicKey.toBase58(), owner = ghost.publicKey;
-    const accounts = async () => (await Promise.all(["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].map(p =>
-      connection.getParsedTokenAccountsByOwner(owner, { programId: new web3.PublicKey(p) }).then(r => r.value.map(a => ({ address: a.pubkey.toBase58(), programId: p, lamports: a.account.lamports, mint: a.account.data.parsed.info.mint, raw: BigInt(a.account.data.parsed.info.tokenAmount.amount) }))).catch(() => [])))).flat();
-    for (const a of (await accounts()).filter(a => a.raw > 0n && a.mint !== SOL_MINT)) {
-      say(`Ghost #${index}: selling ${short(a.mint)}…`);
-      const prep = await prepareSwap({ web3, jup, connection, side: "sell", mint: a.mint, amountRaw: a.raw, user: gpk, treasury: TREASURY, feeBps: 0, slippageBps: Math.max(S.slippage, 500), priorityMaxLamports: PRIORITY_MAX_LAMPORTS });
-      prep.tx.sign([ghost]);
-      await sendAndConfirm(connection, prep.tx, prep.lastValidBlockHeight);
-    }
-    const left = await accounts();
-    const stuck = left.filter(a => a.raw > 0n);
-    const close = left.filter(a => a.raw === 0n);
-    const amount = exitAmount(await connection.getBalance(owner), close);
-    if (amount <= 0n) throw new GhostError(`Ghost #${index} has nothing left to send.`);
-    say(`Ghost #${index}: getting a private route home…`);
-    solAsset = solAsset || await oc.tokens().then(solAssetId).catch(() => undefined);
-    const { quote, confidential } = await routeQuote({ oc, asset: solAsset, amount, from: gpk, to: S.wallet.pk, confidentiality: GHOST_CONFIDENTIALITY });
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
-    const tx = exitTx(web3, { ghost, depositAddress: quote.depositAddress, amount, closeAccounts: close, blockhash });
-    const sig = await sendAndConfirm(connection, tx, lastValidBlockHeight);
-    oc.submitDeposit(sig, quote.depositAddress).catch(() => {});
-    const rec = ghostRecords().find(g => g.index === index) || { index, address: gpk };
-    saveGhost({ ...rec, state: "exiting", exitDeposit: quote.depositAddress });
-    await waitForRoute(oc, quote.depositAddress, { onStatus: s => say(`Ghost #${index} → your wallet: ${ROUTE_LABEL[s] || s.toLowerCase()}${confidential ? " (confidential)" : ""}…`) });
-    saveGhost({ ...rec, state: stuck.length ? "partial" : "closed" });
-    setStatus(`Ghost #${index} is back in your wallet: ${fromRaw(BigInt(quote.amountOut), 9, 4)} SOL${stuck.length ? `. ${stuck.length} token(s) had no route and stayed in the ghost wallet` : ""}.`, "ok", sig);
-    refreshBalances();
-  } catch (e) {
-    setStatus(e && e.code === 4001 ? "Cancelled in wallet." : (e && e.message) || "Exit failed.", "err");
-  } finally { S.busy = false; renderGhosts(); }
-}
-
-// The Ghost tab: scan recorded ghosts plus a few indices beyond, so a new device finds them too.
-async function renderGhosts(extra = 3) {
-  const list = $("g-list");
-  list.textContent = "";
-  if (!S.wallet) { text($("g-head"), "Connect a wallet to see its ghost wallets."); return; }
-  if (!S.seed) return;
-  text($("g-unlock"), "Scan further");
-  text($("g-head"), "Scanning ghost wallets…");
-  const recs = ghostRecords(), top = recs.reduce((m, g) => Math.max(m, g.index), -1) + extra;
-  const rows = [];
-  for (let i = 0; i <= top; i++) {
-    const ghost = await deriveGhost(web3, S.seed, i), pk = ghost.publicKey;
-    const [bal, toks] = await Promise.all([connection.getBalance(pk).catch(() => 0), connection.getParsedTokenAccountsByOwner(pk, { programId: new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }).then(r => r.value).catch(() => [])]);
-    const held = toks.map(a => a.account.data.parsed.info).filter(t => BigInt(t.tokenAmount.amount) > 0n);
-    const rec = recs.find(g => g.index === i);
-    if (!bal && !held.length && !(rec && rec.state !== "closed")) continue;
-    rows.push({ i, ghost, bal: BigInt(bal), held, rec });
-  }
-  text($("g-head"), rows.length ? `${rows.length} ghost wallet${rows.length === 1 ? "" : "s"} with funds or in progress.` : "No ghost wallets with funds. Turn on Ghost mode in the trade panel to make one.");
-  for (const r of rows) {
-    const row = make("div", "ghost-row"), meta = make("div", "meta"), acts = make("div", "acts");
-    meta.append(make("b", "", `Ghost #${r.i}`), ` · ${short(r.ghost.publicKey.toBase58())} · ${fromRaw(r.bal, 9, 4)} SOL`);
-    for (const t of r.held) meta.append(` · ${Number(t.tokenAmount.uiAmountString || t.tokenAmount.uiAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${r.rec && r.rec.mint === t.mint ? r.rec.symbol : short(t.mint)}`);
-    if (r.rec) meta.append(` · ${r.rec.state}`);
-    const exit = make("button", "btn primary", r.held.length ? "Sell all & exit" : "Exit to wallet"); exit.type = "button";
-    exit.onclick = () => ghostExit(r.i, row);
-    const key = make("button", "btn quiet", "Export key"); key.type = "button";
-    key.onclick = () => {
-      const old = row.querySelector(".keybox"); if (old) return old.remove();
-      const box = make("div", "keybox", `Secret key for ghost #${r.i} (import into Phantom or Solflare): ${base58Encode(r.ghost.secretKey)}`);
-      row.append(box);
-    };
-    acts.append(exit, key); row.append(meta, acts); list.append(row);
-  }
-}
-$("g-unlock").addEventListener("click", async () => {
-  if (!S.wallet) return $("connect").click();
-  try { await ghostSeed(); text($("g-unlock"), "Scan further"); await renderGhosts(S.scanned = (S.scanned || 3) + (S.seed ? 7 : 0)); }
-  catch (e) { text($("g-head"), e && e.code === 4001 ? "Cancelled in wallet." : e.message); }
-});
-
-/* ---------- activity ---------- */
-const ACT_KEY = pk => `ghostprint-activity-${pk}`;
-function logActivity(a) {
-  const k = ACT_KEY(S.wallet.pk), list = JSON.parse(store.get(k) || "[]");
-  list.unshift(a); store.set(k, JSON.stringify(list.slice(0, 50))); renderActivity();
-}
-function renderActivity() {
-  const host = $("p-act"); host.textContent = "";
-  let list = [];
-  try { list = S.wallet ? JSON.parse(store.get(ACT_KEY(S.wallet.pk)) || "[]") : []; } catch (_) {}
-  if (!list.length) { host.append(make("p", "muted", "Trades you make here show up in this list.")); return; }
-  const tbl = make("table"), head = make("tr");
-  for (const [h, c] of [["When"], ["Trade"], ["Tx", "num"]]) head.append(make("th", c, h));
-  tbl.append(head);
-  for (const a of list) {
-    const tr = make("tr"), tx = make("td", "num"), link = make("a", "", short(a.sig) + " ↗");
-    link.href = `https://solscan.io/tx/${a.sig}`; link.target = "_blank"; link.rel = "noopener"; tx.append(link);
-    tr.append(make("td", "", new Date(a.time).toLocaleString()), make("td", a.side === "buy" ? "up" : "down", a.side === "buy" ? `Buy ${a.out} ${a.sym}` : `Sell ${a.amount} ${a.sym}`), tx);
-    tbl.append(tr);
-  }
-  host.append(tbl);
-}
-
-/* ---------- exposure ---------- */
-let exposureFor = null;
-function resetExposure() { exposureFor = null; text($("x-score"), "—"); text($("x-grade"), "What trackers can link to your wallet"); $("x-list").textContent = ""; }
-$("x-run").addEventListener("click", async () => {
-  if (!S.wallet) return $("connect").click();
-  const btn = $("x-run"); btn.disabled = true; text(btn, "Tracing…");
-  try {
-    const r = await trace(S.wallet.pk, { url: rpcUrl, onProgress: p => text($("x-grade"), p.step === "transactions" ? `Reading transactions ${p.done}/${p.total}` : p.step === "neighbours" ? `Checking neighbouring wallets ${p.done}/${p.total}` : "Reading history…") });
-    exposureFor = S.wallet.pk;
-    const sc = $("x-score"); text(sc, String(r.score)); sc.className = "score " + (r.score >= 50 ? "down" : "");
-    text($("x-grade"), `${r.grade} · read ${r.scanned} transactions. Ghost mode is built to keep new trades off this graph.`);
-    const list = $("x-list"); list.textContent = "";
-    for (const f of r.findings) { const li = make("li", "sev-" + f.sev); li.append(make("span", "k", f.k), make("span", "v", f.v), make("span", "g", f.sev === "warn" ? "Warning" : f.g), make("span", "why", f.why)); list.append(li); }
-  } catch (e) { text($("x-grade"), e.message || "Couldn't trace this wallet."); }
-  finally { btn.disabled = false; text(btn, "Trace again"); }
-});
-
-/* ---------- tabs ---------- */
-const tabs = [...document.querySelectorAll("[role=tab]")];
-tabs.forEach(t => t.addEventListener("click", () => tabs.forEach(o => { const on = o === t; o.setAttribute("aria-selected", on); $(o.getAttribute("aria-controls")).hidden = !on; })));
-
-/* ---------- boot ---------- */
-renderSlip(); renderSide();
-jup.prices([SOL_MINT]).then(p => { S.solUsd = p[SOL_MINT]?.usdPrice ?? null; }).catch(() => {});
-const deep = decodeURIComponent(location.hash.slice(1));
-if (isAddress(deep)) jup.search(deep).then(l => selectToken((l || []).find(x => x.id === deep) || { id: deep })).catch(() => selectToken({ id: deep }));
-else jup.search("DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263").then(l => { if (!S.token && l && l[0]) selectToken(l[0]); }).catch(() => {});
-// reconnect silently if the wallet already trusts this site
-for (const w of providers()) { if (w.p.isConnected || w.p.publicKey) { w.p.connect?.({ onlyIfTrusted: true }).then(() => connect(w)).catch(() => {}); break; } }
-</script>
+<script type="module" src="./terminal.js"></script>
 </body>
 </html>

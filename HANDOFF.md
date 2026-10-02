@@ -14,6 +14,31 @@ The product plan:
 
 Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photon and Trojan. Big open risks: execution speed against those bots, privacy that is never perfect (so never say "untraceable"), and legal exposure. A Tornado Cash developer was convicted in 2025; get a lawyer before Ghost mode ships.
 
+## Terminal v2 (app.html + terminal.js, Axiom/Padre-style)
+- **Structure:** a single page with a hash router (`#/` Pulse, `#/trending`, `#/token/<mint>`, `#/tracker`, `#/portfolio`; old `#<mint>` links redirect). The markup and CSS are in `app.html`; logic is in `terminal.js`; pure logic is in `market.js` and `pump.js`; network code is in `feeds.js`.
+- **Pulse data:**
+  - PumpPortal `wss://pumpportal.fun/api/data`, using only its free `subscribeNewToken` and `subscribeMigration` streams. Its trade streams are metered at 0.01 SOL per 10k trades, so they're deliberately not used.
+  - Jupiter `/tokens/v2/recent` and `toptraded/5m` (graduated pump tokens) seed the board.
+  - Every 6 s, `getMultipleAccounts` reads up to 100 pump bonding-curve PDAs (`["bonding-curve", mint]` under `6EF8…F6P`). Progress = 1 − realTokenReserves / 793.1M tokens; market cap = vSol / vTok × supply.
+  - Final Stretch begins at a configurable 60%. A token is migrated when its curve is complete or a migration event arrives. Token metadata (image and socials) comes from the IPFS URI, four requests at a time.
+- **Live trades on token pages:** `logsSubscribe {mentions:[mint]}` on the RPC websocket.
+  - pump.fun `TradeEvent` (discriminator `bddb7fd34ee661ee`) is decoded from `Program data:` log lines.
+  - If the event was emitted through an inner instruction (emit_cpi), the transaction is fetched with `getTransaction` (at most 2 at once, a queue of 12) and the event is found anywhere in the inner instruction bytes.
+  - For other DEXes, the fee payer's token and SOL change is used.
+- **Instant wallet:** `deriveInstant` = SHA-256(signature ‖ "ghostprint/instant/0"), from the same Ghost signature, so one signature covers the instant wallet and every ghost wallet. Trades from it go through `executeTrade` with the normal fee.
+  - Deposits: direct (links the two wallets on-chain) or private (a 1Click route to the instant wallet).
+  - Withdrawals: direct, or private through 1Click; SOL only, tokens stay in the instant wallet.
+- **Presets** map to Jupiter's `prioritizationFeeLamports.priorityLevelWithMaxLamports` (`medium`/`high`/`veryHigh`, plus the cap). Slippage is per preset.
+- **PnL** is average cost, from the terminal's own trade log in localStorage per wallet. Trades made elsewhere aren't counted (a known limit). On-chain holdings come from token accounts, valued at Jupiter prices converted to SOL.
+- **Tracker:** polls `getSignaturesForAddress` (limit 6–10) every 20 s per wallet through the user's RPC and parses swaps with `walletSwaps`. The first pass shows recent history without toasts.
+- **Verified in Chromium** against a mock world (`scratchpad/v2/world.mjs`, not in the repo), with the websockets faked through Playwright's `routeWebSocket`:
+  - Pulse columns from the live stream and curves; token page head, curve, both live-trade paths, holders and audit; watchlist.
+  - A main buy with P2; an instant buy with **zero wallet popups**; ⚡ quick buy from Pulse; Trending; a Tracker swap; Portfolio PnL.
+  - Settings and the wallet modal; hotkeys; a 50% sell (fee after cleanup).
+  - A ghost buy (one message signature for the whole session); a private instant deposit and direct withdraw; a ghost exit; a 100% sell from the instant wallet in Portfolio.
+  - No overflow at 390 and 1024 px, and no page errors.
+- **Not built yet (Axiom has these):** limit orders, TP/SL and migration sniping (they need a keeper server, or the tab left open); a Twitter/X monitor (needs a paid X API); Jito bundles and MEV protection; multi-wallet bundles; PnL for trades made outside the terminal.
+
 ## Terminal (app.html, swap.js, config.js)
 - **Swaps:** Jupiter `/swap/v1/quote` (with `restrictIntermediateTokens=true` and `maxAccounts=54`, which leaves room for the fee instruction), then `/swap/v1/swap-instructions` (wrapAndUnwrapSol, dynamicComputeUnitLimit, priority fee `veryHigh` capped at `PRIORITY_MAX_LAMPORTS`). `buildSwapTx` assembles a v0 transaction in this order: compute budget, Jupiter's `otherInstructions`, setup, swap, cleanup. Lookup tables come from the RPC.
 - **Fee** (`FEE_BPS`, default 50) is a plain `SystemProgram.transfer` to `TREASURY` inside the user's transaction:

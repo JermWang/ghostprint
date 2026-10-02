@@ -2,7 +2,16 @@
 
 A privacy trading terminal for Solana.
 
-- **Terminal** (`app.html`): connect Phantom, Solflare or Backpack, search any token, see its DexScreener chart, and buy or sell against SOL through Jupiter. It's non-custodial: every trade is a single transaction you sign in your own wallet. A 0.5% fee in SOL goes to the treasury inside that same transaction.
+- **Terminal** (`app.html`), an Axiom/Padre-style trench terminal:
+  - **Pulse:** New Pairs, Final Stretch and Migrated columns. They stream live from PumpPortal's free feed of pump.fun launches and migrations, are seeded from Jupiter's recent and top-traded lists, and show bonding-curve progress and market cap read straight from the curve accounts on-chain. Each column has filters, pauses while you hover, and has ⚡ one-click buys.
+  - **Trending:** Jupiter's trending, most-traded and organic lists, plus new pools, at 5m, 1h, 6h or 24h.
+  - **Token pages:** DexScreener chart and stats, a bonding-curve bar, and live trades (pump.fun trade events decoded from logs or inner instructions over your RPC websocket, plus any other DEX's swaps). Also top holders labelled curve or dev, with a Track button; authorities, top-10 and dev holdings; a dev-wallet trace; a watchlist star; and your own trades.
+  - **Trade panel:** buy/sell, quick amounts, sell percentages, P1–P3 presets (slippage, priority level, priority cap), a choice of trading from Main or ⚡ Instant, and Ghost mode.
+  - **⚡ Instant wallet:** derived from one signature of your wallet. Trades sign in the tab with no popups. Deposit directly or privately through NEAR, withdraw directly or privately, export the key.
+  - **Tracker:** follow wallets, get a live swap feed and toasts, copy-buy with ⚡.
+  - **Portfolio:** positions for Main or Instant with average cost and realized/unrealized PnL, sell 50%/100%, ghost wallets, Exposure, and activity.
+  - **Also:** a watchlist bar, settings (quick amounts, presets, Final Stretch threshold, RPC), hotkeys (`/` search, `b`/`s` buy/sell, `1`–`3` presets, `p` Pulse) and migration alerts.
+  - Every trade routes through Jupiter. A 0.5% SOL fee goes to the treasury inside the same transaction, from Main or Instant. Ghost wallets never pay it; ghost buys pay at funding.
 - **Exposure** (on the landing page, and as a tab in the terminal): paste any wallet and see what trackers can link to it: funding source, sibling wallets, exchange links, wallets you move funds between, address-poisoning attempts, the hours you're awake, and what you hold. Read-only.
 - **Ghost mode** (beta, in the terminal): buy from a fresh ghost wallet with no on-chain link to yours. Funds go in and out through **NEAR Intents** (1Click API, Confidential Intents): you pay into a one-time deposit address, and NEAR's bridge pays the ghost from its own wallets. Ghost wallets are derived from one signature of your wallet, so signing again on any device rebuilds them. The Ghost tab lists them and can sell, exit back to your wallet, or export a key.
 
@@ -37,12 +46,15 @@ npm install   # dev only: @solana/web3.js for the tests
 npm test
 ```
 
-Tests run against a fake chain (`test/mockchain.mjs`), fake Jupiter responses (`test/jupmock.mjs`) and a fake 1Click API (`test/oneclickmock.mjs`). They build real signed transactions with web3.js and decode them to check where the fee goes and how much it is.
+Tests run against a fake chain (`test/mockchain.mjs`), fake Jupiter responses (`test/jupmock.mjs`) and a fake 1Click API (`test/oneclickmock.mjs`). `pump.test.mjs` and `market.test.mjs` cover curve and trade-event decoding, the Pulse columns, tracker parsing and PnL. They build real signed transactions with web3.js and decode them to check where the fee goes and how much it is.
 
 ## Files
 
 - `index.html`: landing page and the Exposure tracer
-- `app.html`: the terminal
+- `app.html`: the terminal's markup and styles; `terminal.js`: its views and logic
+- `pump.js`: pump.fun bonding-curve and trade-event decoding
+- `feeds.js`: PumpPortal websocket, RPC live trades, curve reads, metadata, holders, tracked-wallet swaps
+- `market.js`: Pulse board, wallet swap parsing, PnL (no DOM or network, so it's tested in Node)
 - `config.js`: treasury, fee, Jupiter settings
 - `swap.js`: Jupiter client, fee math, transaction assembly, sending and confirming
 - `ghost.js`: Ghost mode (ghost wallet derivation, NEAR Intents 1Click client, quote checks, funding and exit transactions, route status)
