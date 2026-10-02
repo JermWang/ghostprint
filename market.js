@@ -121,3 +121,10 @@ export function pnl(trades, pricesSol = {}) {
     return { ...p, avg, holding, price, value, realized, unrealized, total, pct: p.boughtSol ? total / p.boughtSol * 100 : 0 };
   }).sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 }
+
+// Merge on-chain swaps into the terminal's trade log without duplicating anything already logged.
+export function mergeHistory(log, swaps, symbolOf = m => m.slice(0, 4)) {
+  const seen = new Set(log.map(t => `${t.sig}:${t.mint}`));
+  const add = swaps.filter(s => !seen.has(`${s.sig}:${s.mint}`)).map(s => ({ sig: s.sig, time: (s.time || 0) * 1000, side: s.side, mint: s.mint, symbol: symbolOf(s.mint), sol: s.sol, tokens: s.tokens, from: "chain" }));
+  return [...log, ...add].sort((a, b) => b.time - a.time);
+}

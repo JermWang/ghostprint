@@ -7,6 +7,24 @@ export const LAMPORTS = 1_000_000_000n;
 
 export class SwapError extends Error {}
 
+// Jito: a tip to one of these accounts makes the transaction eligible for Jito's block engine,
+// which forwards it straight to the leader (and, sent only there, keeps it out of the public mempool).
+export const JITO_URL = "https://mainnet.block-engine.jito.wtf/api/v1/transactions";
+export const JITO_TIP_ACCOUNTS = [
+  "96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5", "HFqU5x63VTqvQss8hp11i4wVV8bD44PvwucfZ2bU7gRe",
+  "Cw8CFyM9FkoMi7K7Crf6HNQqf4uEMzpKw6QNghXLvLkY", "ADaUMid9yfUytqMBgopwjb2DTLSokTSzL1zt6iGPaS49",
+  "DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh", "ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt",
+  "DttWaMuVvTiduZRnguLF7jNxTgiMBZ1hyAumKUiL2KRL", "3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT"
+];
+export const JITO_MIN_TIP = 1000n;
+const toB64 = u8 => { let s = ""; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000)); return btoa(s); };
+export async function jitoSend(url, raw, f = globalThis.fetch.bind(globalThis)) {
+  const res = await f(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "sendTransaction", params: [toB64(raw), { encoding: "base64" }] }) });
+  const body = await res.json().catch(() => null);
+  if (!res.ok || !body || body.error) throw new SwapError(`Jito: ${body?.error?.message || `HTTP ${res.status}`}`);
+  return body.result;
+}
+
 export function jupiter({ base = "https://api.jup.ag", apiKey = "", fetch: f = globalThis.fetch.bind(globalThis), minInterval = 0 } = {}) {
   const headers = apiKey ? { "x-api-key": apiKey } : {};
   // Jupiter's free tiers allow about one request per second, so requests queue up and go out spaced.
@@ -41,6 +59,8 @@ export function jupiter({ base = "https://api.jup.ag", apiKey = "", fetch: f = g
         prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: priorityMaxLamports, priorityLevel } }
       })
     }),
+    get: path => call(path),
+    post: (path, body) => call(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }),
     search: q => call(`/tokens/v2/search?${new URLSearchParams({ query: q })}`),
     // token lists: "recent", or a category (toptrending, toptraded, toporganicscore) with an interval (5m, 1h, 6h, 24h)
     list: (category, interval, limit = 50) => call(category === "recent" ? "/tokens/v2/recent" : `/tokens/v2/${category}/${interval}?${new URLSearchParams({ limit: String(limit) })}`),
@@ -87,7 +107,7 @@ export function toInstruction(web3, ix) {
 }
 
 // Assemble Jupiter's pieces plus the fee transfer into one v0 transaction for the user to sign.
-export function buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash, lookupTables = [] }) {
+export function buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash, lookupTables = [], tip = null }) {
   const payer = new web3.PublicKey(user);
   const ix = x => toInstruction(web3, x);
   const feeIx = BigInt(fee) > 0n
@@ -100,14 +120,15 @@ export function buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash,
     ...(side === "buy" && feeIx ? [feeIx] : []),
     ix(parts.swapInstruction),
     ...(parts.cleanupInstruction ? [ix(parts.cleanupInstruction)] : []),
-    ...(side === "sell" && feeIx ? [feeIx] : [])
+    ...(side === "sell" && feeIx ? [feeIx] : []),
+    ...(tip && BigInt(tip.lamports) >= JITO_MIN_TIP ? [web3.SystemProgram.transfer({ fromPubkey: payer, toPubkey: new web3.PublicKey(tip.account), lamports: BigInt(tip.lamports) })] : [])
   ];
   const message = new web3.TransactionMessage({ payerKey: payer, recentBlockhash: blockhash, instructions }).compileToV0Message(lookupTables);
   return new web3.VersionedTransaction(message);
 }
 
 // Quote, build and return everything the UI needs to show before the user signs.
-export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw, user, treasury, feeBps, slippageBps, priorityMaxLamports, priorityLevel }) {
+export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw, user, treasury, feeBps, slippageBps, priorityMaxLamports, priorityLevel, tipLamports = 0n }) {
   let quote, fee;
   if (side === "buy") {
     const split = feeOnBuy(amountRaw, feeBps);
@@ -123,24 +144,36 @@ export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw
     Promise.all((parts.addressLookupTableAddresses || []).map(a => connection.getAddressLookupTable(new web3.PublicKey(a)).then(r => r.value))).then(v => v.filter(Boolean)),
     connection.getLatestBlockhash("confirmed")
   ]);
-  const tx = buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash, lookupTables });
+  const tip = BigInt(tipLamports) >= JITO_MIN_TIP ? { lamports: BigInt(tipLamports), account: JITO_TIP_ACCOUNTS[Math.floor(Math.random() * JITO_TIP_ACCOUNTS.length)] } : null;
+  const tx = buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash, lookupTables, tip });
   if (tx.serialize().length > 1232) throw new SwapError("This route is too large for one transaction. Try a different amount.");
-  return { tx, quote, fee, lastValidBlockHeight };
+  return { tx, quote, fee, lastValidBlockHeight, tip };
 }
 
 // Send, keep rebroadcasting until confirmed or the blockhash expires.
-export async function sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus = () => {}, interval = 2000 } = {}) {
+// jito: block engine URL to also send through. mevProtect: send only through Jito (after a simulation check).
+export async function sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus = () => {}, interval = 2000, jito = null, mevProtect = false, fetch: f } = {}) {
   const raw = signed.serialize();
-  const sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 0, preflightCommitment: "confirmed" })
-    .catch(e => { throw new SwapError(simError(e)); });
+  const viaJito = () => jito ? jitoSend(jito, raw, f) : Promise.reject(new SwapError("Jito isn't configured."));
+  let sig;
+  if (jito && mevProtect) {
+    const sim = await connection.simulateTransaction(signed, { sigVerify: false, commitment: "confirmed" }).catch(() => null);
+    if (sim && sim.value && sim.value.err) throw new SwapError(simError({ message: JSON.stringify(sim.value.err) + " " + (sim.value.logs || []).slice(-3).join(" ") }));
+    sig = await viaJito();
+  } else {
+    sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 0, preflightCommitment: "confirmed" })
+      .catch(e => { throw new SwapError(simError(e)); });
+    if (jito) viaJito().catch(() => {});
+  }
   onStatus({ state: "sent", sig });
   for (;;) {
     const { value: [st] } = await connection.getSignatureStatuses([sig]);
     if (st && st.err) throw new SwapError(`The swap failed on-chain${slippageHint(st.err)}. Nothing but the network fee was spent.`);
     if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) { onStatus({ state: "confirmed", sig }); return sig; }
-    if ((await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new SwapError("The swap didn't land before it expired. Nothing was spent. Try again.");
+    if ((await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new SwapError("The swap didn't land before it expired. Nothing was spent. Try again, or raise priority or the Jito tip.");
     await new Promise(r => setTimeout(r, interval));
-    connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
+    if (!mevProtect) connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
+    if (jito) viaJito().catch(() => {});
   }
 }
 function simError(e) {

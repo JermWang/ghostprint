@@ -24,3 +24,8 @@ export const ONECLICK_JWT = "";
 export const GHOST_CONFIDENTIALITY = "basic";       // "basic" or "advanced" Confidential Intents; "public" to opt out
 export const GHOST_MAX_SOL = 5;                     // per ghost buy while Ghost mode is in beta
 export const GHOST_GAS_RESERVE = 10_000_000n;       // 0.01 SOL kept in each ghost wallet for fees and token account rent
+
+// After deploying worker/ (see worker/README.md), set this to the worker URL, e.g.
+// "https://ghostprint-proxy.<you>.workers.dev". RPC, Jupiter, NEAR Intents, Jito and X then go through
+// the proxy, which holds the keys. Empty = browsers talk to the public endpoints directly.
+export const PROXY_URL = "";

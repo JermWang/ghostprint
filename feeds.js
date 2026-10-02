@@ -151,3 +151,18 @@ export async function recentSwaps({ connection, web3, wallet, seen, limit = 8 })
   return out;
 }
 export { SOL_MINT };
+
+// A wallet's swap history from the chain, newest first, a few transactions at a time (for PnL on
+// trades made outside the terminal). `before` pages further back.
+export async function walletHistory({ connection, web3, wallet, limit = 100, before, concurrency = 4, onProgress = () => {} }) {
+  const sigs = (await connection.getSignaturesForAddress(new web3.PublicKey(wallet), before ? { limit, before } : { limit })).filter(s => !s.err);
+  const out = [];
+  let done = 0;
+  for (let i = 0; i < sigs.length; i += concurrency) {
+    const batch = sigs.slice(i, i + concurrency);
+    const txs = await Promise.all(batch.map(s => connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" }).catch(() => null)));
+    txs.forEach((tx, j) => { if (!tx) return; const json = JSON.parse(JSON.stringify(tx)); json.transaction.signatures = [batch[j].signature]; out.push(...walletSwaps(json, wallet)); });
+    onProgress((done += batch.length), sigs.length);
+  }
+  return { swaps: out, last: sigs.length ? sigs[sigs.length - 1].signature : null };
+}

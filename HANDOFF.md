@@ -37,7 +37,31 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
   - Settings and the wallet modal; hotkeys; a 50% sell (fee after cleanup).
   - A ghost buy (one message signature for the whole session); a private instant deposit and direct withdraw; a ghost exit; a 100% sell from the instant wallet in Portfolio.
   - No overflow at 390 and 1024 px, and no page errors.
-- **Not built yet (Axiom has these):** limit orders, TP/SL and migration sniping (they need a keeper server, or the tab left open); a Twitter/X monitor (needs a paid X API); Jito bundles and MEV protection; multi-wallet bundles; PnL for trades made outside the terminal.
+- **Added in v3:**
+  - **Limit orders:** Jupiter Trigger v1 (`/trigger/v1/createOrder` → sign → `/execute`, plus `getTriggerOrders` and `cancelOrder`). The request and response shapes come from Jupiter's official Rust SDK (`jup-ag-sdk` 1.0.6 on crates.io), because the docs sites were blocked from the dev container.
+    - `limitAmounts` converts a USD target price to making/taking raw amounts in BigInt.
+    - Sell-below and buy-above limits are refused, since they would fill instantly.
+    - **No Ghostprint fee on limit orders yet:** Jupiter only pays fees to a Referral Program token account (`feeAccount`). Create one for the treasury with `@jup-ag/referral-sdk`; that needs the treasury key, so run it yourself.
+  - **Stop-loss** isn't a v1 limit order. Jupiter's newer price orders (TP/SL/OCO through vaults and auth) have docs that weren't reachable, so SL, trailing stop and TP-by-% run in the **autopilot** instead:
+    - It checks Jupiter prices every 4 s and sells from the ⚡ Instant wallet. A 100% sell cancels the other rules on that mint, like OCO.
+    - It only works while the terminal is open, and pauses (shown by the 🤖 chip) until the instant wallet is unlocked.
+  - **Migration sniper:** 🎯 on Pulse cards. It fires on PumpPortal migration events or when a curve reads complete (armed mints are always included in the curve reads). It buys the quick-buy amount from the instant wallet, then optionally adds TP (sells 50%) and SL rules from Settings.
+  - **Jito:**
+    - Each preset can carry `tipSol`. The tip transfer to one of the 8 tip accounts is the last instruction, and tips under 1000 lamports are dropped.
+    - Fast mode sends through Jito and RPC together. MEV protect simulates first, then sends only through Jito.
+    - Jito's CORS from browsers is unknown, so use the proxy's `/jito`.
+  - **On-chain history import:** reads the last 100 transactions, parses swaps, and merges them into the trade log without duplicates.
+  - **X posts tab:** goes through the proxy only (pay-per-read X API, cached 5 minutes).
+  - **Proxy (`worker/`):** RPC method allowlist plus websocket pass-through; Jupiter with the key and short GET caching; 1Click with the JWT; Jito `sendTransaction` only; X search; an origin allowlist; a best-effort per-IP limit. Set `PROXY_URL` in `config.js` after deploying.
+  - **Verified:** unit tests (45). In Chromium against the mock world:
+    - a limit order from the instant wallet (exact Trigger body, signature verified) is listed and cancelled;
+    - a sell-below limit is blocked;
+    - P3 sends through Jito only, with the tip and the treasury fee;
+    - a stop-loss fires on a price crash and sells from the instant wallet;
+    - a snipe fires on a migration event;
+    - the Posts tab without a proxy shows its message;
+    - Portfolio orders and the import work, with no page errors, three runs in a row.
+- **Still not built:** a Twitter/X monitor feed across all tokens (only per-token posts exist); multi-wallet bundles; Jupiter's vault-based TP/SL/OCO (to make stop-losses work with the tab closed); a Ghostprint fee on limit orders (needs the referral account).
 
 ## Terminal (app.html, swap.js, config.js)
 - **Swaps:** Jupiter `/swap/v1/quote` (with `restrictIntermediateTokens=true` and `maxAccounts=54`, which leaves room for the fee instruction), then `/swap/v1/swap-instructions` (wrapAndUnwrapSol, dynamicComputeUnitLimit, priority fee `veryHigh` capped at `PRIORITY_MAX_LAMPORTS`). `buildSwapTx` assembles a v0 transaction in this order: compute budget, Jupiter's `otherInstructions`, setup, swap, cleanup. Lookup tables come from the RPC.

@@ -86,3 +86,30 @@ test("Jupiter errors become readable messages", async () => {
   await keyed.search("bonk");
   assert.equal(sent.headers["x-api-key"], "k");
 });
+
+test("Jito tip is appended to the swap and sent through the block engine", async () => {
+  const { JITO_TIP_ACCOUNTS, sendAndConfirm } = await import("../swap.js");
+  const kp = web3.Keypair.generate(), user = kp.publicKey.toBase58();
+  const r = await prepareSwap({ web3, jup: jupiter({ fetch: fakeFetch }), connection, side: "buy", mint: MINT, amountRaw: 1_000_000_000n, user, treasury: TREASURY, feeBps: 50, slippageBps: 300, priorityMaxLamports: 1e6, tipLamports: 200_000n });
+  const steps = readable(r.tx);
+  const tipStep = steps[steps.length - 1];
+  assert.equal(tipStep.kind, "transfer"); assert.equal(tipStep.lamports, 200_000n); assert.ok(JITO_TIP_ACCOUNTS.includes(tipStep.to));
+  const noTip = await prepareSwap({ web3, jup: jupiter({ fetch: fakeFetch }), connection, side: "buy", mint: MINT, amountRaw: 1_000_000_000n, user, treasury: TREASURY, feeBps: 50, slippageBps: 300, priorityMaxLamports: 1e6, tipLamports: 500n });
+  assert.equal(readable(noTip.tx).filter(s => s.kind === "transfer").length, 1, "tips under Jito's 1000-lamport minimum are dropped");
+  r.tx.sign([kp]);
+  const jitoCalls = [], rpcSends = [];
+  const conn = {
+    simulateTransaction: async () => ({ value: { err: null, logs: [] } }),
+    sendRawTransaction: async () => { rpcSends.push(1); return "RPCSIG"; },
+    getSignatureStatuses: async () => ({ value: [{ confirmationStatus: "confirmed", err: null }] }),
+    getBlockHeight: async () => 1
+  };
+  const f = async (url, init) => { jitoCalls.push({ url, body: JSON.parse(init.body) }); return { ok: true, status: 200, json: async () => ({ result: "JITOSIG" }) }; };
+  assert.equal(await sendAndConfirm(conn, r.tx, 100, { jito: "https://jito.test/api/v1/transactions", mevProtect: true, fetch: f }), "JITOSIG");
+  assert.equal(rpcSends.length, 0, "MEV-protected sends skip the public RPC");
+  assert.equal(jitoCalls[0].body.method, "sendTransaction"); assert.deepEqual(jitoCalls[0].body.params[1], { encoding: "base64" });
+  assert.equal(await sendAndConfirm(conn, r.tx, 100, { jito: "https://jito.test/api/v1/transactions", fetch: f }), "RPCSIG");
+  assert.equal(rpcSends.length, 1); assert.equal(jitoCalls.length, 2, "fast mode sends through both");
+  const failing = { ...conn, simulateTransaction: async () => ({ value: { err: { InstructionError: [3, { Custom: 6001 }] }, logs: ["slippage exceeded"] } }) };
+  await assert.rejects(sendAndConfirm(failing, r.tx, 100, { jito: "x", mevProtect: true, fetch: f }), /slippage/);
+});
