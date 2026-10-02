@@ -3,15 +3,30 @@
 Read this whole brief before touching anything.
 
 ## What this is now
-Ghostprint started as an in-browser photo metadata scrubber. In October 2026 it pivoted to **on-chain privacy for Solana traders**. The scrubber is gone from the page; it's still in git history (commits `7ca1f36` and the ICC fix after it) if it's ever wanted back.
+Ghostprint started as an in-browser photo metadata scrubber. In October 2026 it pivoted to **on-chain privacy for Solana traders**. **The product is the trading terminal (`app.html`).** Trace/Exposure is the free tool that sells Ghost mode; it is not the product. The scrubber is gone from the page; it's still in git history (commits `7ca1f36` and the ICC fix after it) if it's ever wanted back.
 
 The product plan:
-1. **Trace (built).** Paste any wallet and see what trackers link to it. It's free and read-only, and it's where new users come in.
+0. **Terminal v1 (built).** Wallet connect, token search, chart, buy and sell against SOL through Jupiter, a 0.5% fee to the treasury, positions, activity, and an Exposure tab. Details below.
+1. **Trace / Exposure (built).** Paste any wallet and see what trackers link to it. It's free and read-only, and it's where new users come in.
 2. **Ghost mode (not built).** A trading-terminal toggle: each trade runs from a fresh wallet with no history, profits return through shielded pools already live on Solana (Privacy Cash, Umbra on Arcium, Token-2022 Confidential Balances), amounts and timing are split and jittered, and staked relayers pay gas for the fresh wallets. We route through existing pools rather than running a mixer.
 3. **Token (not launched).** Each use is a real job: fee tiers for holders, buyback funded by trading fees earned in SOL, relayer staking with slashing for censoring or leaking, and referrals. Deliberately no governance or revenue share. Ticker and launch details are TBD, and the page says so.
 4. **Later: Ghost links.** Stealth-address payment links that reuse the same relayers.
 
 Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photon and Trojan. Big open risks: execution speed against those bots, privacy that is never perfect (so never say "untraceable"), and legal exposure. A Tornado Cash developer was convicted in 2025; get a lawyer before Ghost mode ships.
+
+## Terminal (app.html, swap.js, config.js)
+- **Swaps:** Jupiter `/swap/v1/quote` (with `restrictIntermediateTokens=true` and `maxAccounts=54`, which leaves room for the fee instruction), then `/swap/v1/swap-instructions` (wrapAndUnwrapSol, dynamicComputeUnitLimit, priority fee `veryHigh` capped at `PRIORITY_MAX_LAMPORTS`). `buildSwapTx` assembles a v0 transaction in this order: compute budget, Jupiter's `otherInstructions`, setup, swap, cleanup. Lookup tables come from the RPC.
+- **Fee** (`FEE_BPS`, default 50) is a plain `SystemProgram.transfer` to `TREASURY` inside the user's transaction:
+  - Buy: `fee = amount × bps`, the transfer goes before the swap, and the quote uses `amount − fee`.
+  - Sell: `fee = otherAmountThreshold × bps`, taken from the guaranteed minimum SOL and placed after the cleanup step that unwraps wrapped SOL back into SOL.
+  
+  This doesn't use Jupiter's referral program. Only SOL pairs are supported, since all fee math is in SOL.
+- **Send:** `sendRawTransaction` with preflight on, so a failing trade is caught in simulation before it costs anything. The transaction is rebroadcast every 2 s with `skipPreflight` until it's `confirmed`, it errors, or its block height expires. Errors are mapped to plain English (slippage, insufficient SOL, no route, rate limit, rejected in wallet).
+- **Wallets:** injected providers (`window.phantom.solana`, `window.solflare`, `window.backpack`, with `window.solana` as a fallback), using `signTransaction`. A trusted wallet reconnects silently. Wallet Standard isn't supported yet.
+- **Safety rails:** the mint's decimals are read from the chain before any trade is allowed (no guessing); 0.005 SOL is kept back for fees and rent; the button explains why it's disabled; amounts are converted with BigInt.
+- **Data:** token search, metadata and prices come from Jupiter (`/tokens/v2/search` takes comma-separated mints; prices from `/price/v3`). The chart and live stats come from DexScreener: the `token-pairs/v1/solana/{mint}` API picks the most liquid pool and the chart is DexScreener's embed. Requests to Jupiter are spaced (2.05 s keyless, 1.05 s with a key).
+- **Activity** is stored per wallet in localStorage. **Positions** come from token accounts on both token programs, valued with Jupiter prices.
+- `vendor/solana-web3.min.js` is the official IIFE build of web3.js 1.98.4. It's checked in because the dev container couldn't reach CDNs, and it removes a third-party CDN from the trust path.
 
 ## Code
 - `index.html`: the page. Styles are inline. It ends in one `<script type="module">` that imports `trace.js`, so **it must be served over HTTP** (`npm run serve`); opening it as a file breaks the import.
@@ -42,7 +57,11 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
 - **Verified:**
   - `npm test` passes all 7 tests: the full trace on the fake chain, not claiming a funder when history is truncated, a fresh wallet scoring 0, address validation, the RPC client's retry and rate-limit message, refusing a time zone on thin data, and legacy string account keys.
   - End to end in headless Chromium at 1280 px and 375 px with the RPC intercepted: bad input is rejected, the trace makes 69 calls and renders all 8 findings, there's no horizontal overflow, and there are no page errors.
+- **Terminal verified:**
+  - `npm test` passes all 15 tests: 7 for Trace and 8 for swaps. The swap tests cover amount conversion, fee math, instruction order for buys and sells, no transfer when the fee is 0, prepareSwap quoting the post-fee amount, sell fees taken from the guaranteed minimum, and Jupiter error messages.
+  - End to end in headless Chromium with fake Jupiter, RPC, DexScreener and a fake wallet that really signs: connect, buy 1 SOL, sell 50%. Each transaction the page sent was decoded. The buy paid `TREASURY` 5,000,000 lamports before the swap; the sell paid it after cleanup, matching the expected fee to the lamport. The signatures verify against the wallet's key. There's no horizontal overflow at 375 px and no page errors.
 - **Not verified, and the first thing to do:**
+  - **A real mainnet trade.** Make a small buy and sell with a real wallet and check the treasury receives the fee. Watch for: CORS on `api.jup.ag` and DexScreener from the github.io origin, the shape of the real `/swap-instructions` response, transactions exceeding the 1232-byte limit on complex routes (the code refuses rather than sending), and how well transactions land through the public RPC.
   - **Real mainnet data.** This cloud environment's network policy blocked `api.mainnet-beta.solana.com` and `lite-api.jup.ag`, so nothing has run against the real chain. Check:
     - that the public RPC allows browser CORS and what its rate limits are for about 70 calls;
     - trade detection on real Jupiter, Pump.fun and PumpSwap transactions and on trading-bot wallets;
@@ -57,6 +76,8 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
 - There's no copy-trader detection yet ("who is copying your trades"). It needs per-token trade feeds, which means an indexer.
 
 ## TODO, roughly in priority order
+0. Make a small real buy and sell in the terminal (see above), then fix whatever mainnet shows up.
+0b. **A small server proxy** for Jupiter and RPC (for example a Cloudflare Worker) holding a Jupiter key and a paid RPC such as Helius or Triton. That fixes rate limits, transactions landing poorly through the public RPC, and Jupiter ending keyless access. Optionally send through Jito for faster inclusion.
 1. Run Trace on real wallets (your own, a known trader, a fresh wallet) and tune the heuristics.
 2. Add a Helius option (enhanced transactions plus labels) for faster, deeper traces, with the public RPC as fallback.
 3. Deploy as a static site (Vercel or Cloudflare Pages). Decide on the name and domain, and check that "Ghostprint" is free.
