@@ -8,7 +8,7 @@ Ghostprint started as an in-browser photo metadata scrubber. In October 2026 it 
 The product plan:
 0. **Terminal v1 (built).** Wallet connect, token search, chart, buy and sell against SOL through Jupiter, a 0.5% fee to the treasury, positions, activity, and an Exposure tab. Details below.
 1. **Trace / Exposure (built).** Paste any wallet and see what trackers link to it. It's free and read-only, and it's where new users come in.
-2. **Ghost mode (not built).** A trading-terminal toggle: each trade runs from a fresh wallet with no history, profits return through shielded pools already live on Solana (Privacy Cash, Umbra on Arcium, Token-2022 Confidential Balances), amounts and timing are split and jittered, and staked relayers pay gas for the fresh wallets. We route through existing pools rather than running a mixer.
+2. **Ghost mode (beta, built on NEAR Intents).** NEAR was chosen over Monero: NEAR Intents' 1Click API quotes a route, gives a one-time Solana deposit address and pays any Solana recipient from its own bridge wallets, with Confidential Intents (live 8 July 2026) keeping sender, amount and route off the public record. Monero has stronger privacy but no programmable layer; it would need two swaps each way, an in-browser XMR wallet and about 20-minute unlocks, which is unusable for trading. Details are in the Ghost mode section below.
 3. **Token (not launched).** Each use is a real job: fee tiers for holders, buyback funded by trading fees earned in SOL, relayer staking with slashing for censoring or leaking, and referrals. Deliberately no governance or revenue share. Ticker and launch details are TBD, and the page says so.
 4. **Later: Ghost links.** Stealth-address payment links that reuse the same relayers.
 
@@ -27,6 +27,19 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
 - **Data:** token search, metadata and prices come from Jupiter (`/tokens/v2/search` takes comma-separated mints; prices from `/price/v3`). The chart and live stats come from DexScreener: the `token-pairs/v1/solana/{mint}` API picks the most liquid pool and the chart is DexScreener's embed. Requests to Jupiter are spaced (2.05 s keyless, 1.05 s with a key).
 - **Activity** is stored per wallet in localStorage. **Positions** come from token accounts on both token programs, valued with Jupiter prices.
 - `vendor/solana-web3.min.js` is the official IIFE build of web3.js 1.98.4. It's checked in because the dev container couldn't reach CDNs, and it removes a third-party CDN from the trust path.
+
+## Ghost mode (ghost.js, Ghost tab in app.html)
+- **Ghost wallets:** the user signs `GHOST_MESSAGE` once. Ghost #i's key is `Keypair.fromSeed(SHA-256(signature ‖ "ghostprint/ghost/i"))`. Ed25519 signatures are deterministic, so the same wallet rebuilds the same ghosts on any device and nothing secret is stored. A 16-hex fingerprint of the signature is kept in localStorage; if a later signature differs (another wallet app, or a Ledger that can't sign messages), Ghost mode refuses instead of opening different ghosts. localStorage also keeps a record per ghost (index, mint, state, deposit address), but recovery doesn't depend on it: the Ghost tab scans indices past the highest record, and "Scan further" adds 7 more. "Export key" shows a ghost's base58 secret key for importing into a wallet.
+- **Ghost buy:**
+  1. `routeQuote` POSTs `/v0/quote`: SOL (`nep141:sol.omft.near`, looked up from `/v0/tokens`) to SOL, `EXACT_INPUT`, `depositType ORIGIN_CHAIN`, `recipient` = the ghost, `refundTo` = the main wallet, a 30-minute deadline, `confidentiality: "basic"`, `referral: "ghostprint"`. If the confidential rail refuses with a 4xx that mentions confidentiality or support, it retries as public and the UI says "NEAR Intents" instead of "confidential".
+  2. `checkQuote` refuses any quote whose recipient, refund address, assets or amount differ from what was asked, or whose deposit address is invalid or one of our own wallets.
+  3. The main wallet signs one transaction: the deposit transfer plus the 0.5% fee to `TREASURY`. Then `/v0/deposit/submit` is called (best effort), and `/v0/status` is polled until SUCCESS (REFUNDED and FAILED stop with a message).
+  4. Wait for the ghost's balance, then the ghost buys through Jupiter with `feeBps 0`, signed locally, keeping `GHOST_GAS_RESERVE`.
+- **Exit:** the ghost sells every token through Jupiter (minimum 5% slippage). One transaction then closes its empty token accounts and sends SOL plus the reclaimed rent minus the 5000-lamport fee into a new route back to the main wallet (refunds go to the ghost). Tokens with no route stay in the ghost and are reported.
+- **Fee design:** the fee is charged once, from the main wallet at funding. Ghosts never pay the treasury, so the treasury doesn't cluster ghosts together.
+- **Limits:** beta cap `GHOST_MAX_SOL` (5) per ghost buy; minimum 0.02 SOL. Sell-side ghost trades happen from the Ghost tab.
+- **Honest limits, also stated in the UI:** funding and exit amounts and timing can be matched by a determined analyst. Nothing yet splits amounts or adds random delays. The 1Click service itself sees both ends.
+- **The 1Click API format** was taken from the official `@defuse-protocol/one-click-sdk-typescript` 0.1.26 types; the docs sites were blocked from the dev container. Base URL `https://1click.chaindefuser.com`. A JWT is optional; without one 1Click charges 0.1–0.2% per route.
 
 ## Code
 - `index.html`: the page. Styles are inline. It ends in one `<script type="module">` that imports `trace.js`, so **it must be served over HTTP** (`npm run serve`); opening it as a file breaks the import.
@@ -60,7 +73,16 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
 - **Terminal verified:**
   - `npm test` passes all 15 tests: 7 for Trace and 8 for swaps. The swap tests cover amount conversion, fee math, instruction order for buys and sells, no transfer when the fee is 0, prepareSwap quoting the post-fee amount, sell fees taken from the guaranteed minimum, and Jupiter error messages.
   - End to end in headless Chromium with fake Jupiter, RPC, DexScreener and a fake wallet that really signs: connect, buy 1 SOL, sell 50%. Each transaction the page sent was decoded. The buy paid `TREASURY` 5,000,000 lamports before the swap; the sell paid it after cleanup, matching the expected fee to the lamport. The signatures verify against the wallet's key. There's no horizontal overflow at 375 px and no page errors.
+- **Ghost mode verified:**
+  - 10 tests in `test/ghost.test.mjs`: ghost wallets are deterministic and distinct, finding native SOL, the confidential quote request, the public fallback, refusing 5 kinds of tampered quote, funding transaction contents, the exit transaction (close plus send, signed by the ghost), status handling, and the JWT header.
+  - End to end in Chromium with fake 1Click, Jupiter and RPC and a fake wallet:
+    - One message signature.
+    - Funding: main → deposit 0.995 SOL, plus 0.005 SOL to the treasury.
+    - Ghost buy: paid and signed by the ghost, with no treasury transfer.
+    - Ghost tab listing and key export.
+    - Exit: the ghost sells, then closes its token account and sends to a route whose recipient is the main wallet.
 - **Not verified, and the first thing to do:**
+  - **A real Ghost buy and exit with about 0.05 SOL.** Confirm that 1Click accepts SOL→SOL (same asset, different recipient) on Solana, and whether `confidentiality: "basic"` works with `ORIGIN_CHAIN` deposits or falls back to public. Note how long routes take and what 1Click charges.
   - **A real mainnet trade.** Make a small buy and sell with a real wallet and check the treasury receives the fee. Watch for: CORS on `api.jup.ag` and DexScreener from the github.io origin, the shape of the real `/swap-instructions` response, transactions exceeding the 1232-byte limit on complex routes (the code refuses rather than sending), and how well transactions land through the public RPC.
   - **Real mainnet data.** This cloud environment's network policy blocked `api.mainnet-beta.solana.com` and `lite-api.jup.ag`, so nothing has run against the real chain. Check:
     - that the public RPC allows browser CORS and what its rate limits are for about 70 calls;
