@@ -28,6 +28,26 @@ export async function deriveGhost(web3, signature, index) {
   return web3.Keypair.fromSeed(seed);
 }
 
+// Local records can be wiped (cleared browser, new device), so the chain decides which ghosts are used.
+// isUsed(address) → true once anything has touched that address on-chain.
+export async function nextUnusedGhost(web3, signature, { isUsed, start = 0, max = 500 }) {
+  for (let i = Math.max(0, start); i < start + max; i++) {
+    const ghost = await deriveGhost(web3, signature, i);
+    if (!(await isUsed(ghost.publicKey.toBase58()))) return { index: i, ghost };
+  }
+  throw new GhostError("Couldn't find an unused ghost wallet.");
+}
+
+// Every ghost that has been used: walks indexes until `gap` in a row are unused, and always past `known`.
+export async function scanGhosts(web3, signature, { isUsed, known = -1, gap = 5, max = 500 }) {
+  const used = [];
+  for (let i = 0, empty = 0; i < max && (i <= known || empty < gap); i++) {
+    const ghost = await deriveGhost(web3, signature, i);
+    if (await isUsed(ghost.publicKey.toBase58())) { empty = 0; used.push({ index: i, ghost }); } else empty++;
+  }
+  return used;
+}
+
 // The instant trading wallet: same signature, its own derivation path, so it never collides with ghosts.
 export async function deriveInstant(web3, signature) {
   const seed = await sha256(new Uint8Array([...signature, ...enc.encode("ghostprint/instant/0")]));

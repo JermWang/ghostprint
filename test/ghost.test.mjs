@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import web3 from "@solana/web3.js";
-import { deriveGhost, seedFingerprint, oneclick, routeQuote, checkQuote, fundingTx, exitTx, exitAmount, waitForRoute, solAssetId, SOL_ASSET, GHOST_MESSAGE } from "../ghost.js";
+import { deriveGhost, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, routeQuote, checkQuote, fundingTx, exitTx, exitAmount, waitForRoute, solAssetId, SOL_ASSET, GHOST_MESSAGE } from "../ghost.js";
 import { createOneClick } from "./oneclickmock.mjs";
 import { createRequire } from "node:module";
 const { ed25519 } = createRequire(import.meta.url)("@noble/curves/ed25519");
@@ -110,4 +110,25 @@ test("1Click client sends the JWT when configured", async () => {
   let h;
   await oneclick({ jwt: "abc", fetch: async (u, init) => { h = init.headers; return { ok: true, status: 200, json: async () => [] }; } }).tokens();
   assert.equal(h.authorization, "Bearer abc");
+});
+
+test("next ghost skips any index with on-chain history, even when local records are gone", async () => {
+  const addr = async i => (await deriveGhost(web3, sig, i)).publicKey.toBase58();
+  const used = new Set([await addr(0), await addr(1), await addr(3)]);
+  const isUsed = async a => used.has(a);
+  const n = await nextUnusedGhost(web3, sig, { isUsed });
+  assert.equal(n.index, 2);
+  assert.equal(n.ghost.publicKey.toBase58(), await addr(2));
+  assert.equal((await nextUnusedGhost(web3, sig, { isUsed, start: 3 })).index, 4);
+  await assert.rejects(nextUnusedGhost(web3, sig, { isUsed: async () => { throw new Error("rpc down"); } }), /rpc down/);
+});
+
+test("ghost scan finds used ghosts past gaps and always covers known indexes", async () => {
+  const addr = async i => (await deriveGhost(web3, sig, i)).publicKey.toBase58();
+  const used = new Set([await addr(0), await addr(4), await addr(9)]);
+  const isUsed = async a => used.has(a);
+  assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 5 })).map(g => g.index), [0, 4, 9]);
+  assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 3 })).map(g => g.index), [0]);
+  assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 3, known: 9 })).map(g => g.index), [0, 4, 9]);
+  await assert.rejects(scanGhosts(web3, sig, { isUsed: async () => { throw new Error("429"); } }), /429/);
 });
