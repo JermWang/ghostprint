@@ -139,7 +139,7 @@ export async function waitForRoute(oc, depositAddress, { onStatus = () => {}, in
     if (s === "SUCCESS") return st;
     if (s === "REFUNDED") throw new GhostError("NEAR Intents couldn't complete the route and refunded the deposit to the sending wallet.");
     if (s === "FAILED") throw new GhostError("NEAR Intents reported the route as failed. Check the sending wallet for a refund.");
-    if (now() > until) throw new GhostError("The route is taking longer than expected. It may still complete, so check the Ghost tab in a few minutes. If it can't, NEAR Intents refunds the sending wallet.");
+    if (now() > until) throw new GhostError("The route is taking longer than expected. It may still complete, so check Portfolio in a few minutes. If it can't, NEAR Intents refunds the sending wallet.");
     await new Promise(r => setTimeout(r, interval));
   }
 }

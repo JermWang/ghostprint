@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Ghostprint shows what wallet trackers can link to your Solana wallet, read-only and in your browser.">
+<meta name="description" content="Ghostprint is a privacy trading terminal for Solana: live pump.fun Pulse, one-click buys, wallet tracking, and Ghost mode buys funded privately through NEAR Intents.">
 <title>Ghostprint</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -176,6 +176,14 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
 .steps.tight{grid-template-columns:minmax(0,1fr);gap:10px;margin:0}
 @media (max-width:920px){.trace-grid{grid-template-columns:minmax(0,1fr)}}
 
+/* ghost route drawing inside the dark band */
+.route-fig{margin:28px 0 0;border:1.5px solid var(--ink-3);border-radius:14px;overflow:hidden;background:var(--ground)}
+.route-fig .art{overflow-x:auto;overscroll-behavior-x:contain;padding:8px 4px 2px;background:radial-gradient(circle at 1px 1px,rgba(29,31,34,.16) 1px,transparent 1.4px) 0 0/14px 14px}
+.route-fig svg{display:block;width:100%;height:auto;min-width:560px;max-width:980px;margin-inline:auto}
+.route-fig figcaption{background:var(--ink-2);color:var(--mute-ink);font-family:var(--font-mono);font-size:.74rem;line-height:1.5;padding:10px 14px}
+.route-fig figcaption b{color:var(--paper)}
+.band-note .btn{text-decoration:none;display:inline-block;margin:0 8px 8px 0}
+footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase}
 @media (prefers-reduced-motion:reduce){.live i{animation:none}.word rect{transition:none}.btn{transition:none}}
 </style>
 </head>
@@ -189,6 +197,7 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
       <a href="#ghost">Ghost mode</a>
       <a href="#token">Token</a>
       <a href="#trace">Exposure</a>
+      <a href="./docs.html">Docs</a>
       <a class="cta" href="./app.html">Launch terminal</a>
     </nav>
   </header>
@@ -200,7 +209,7 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
         <p class="kicker">Privacy trading terminal for Solana. Live pump.fun Pulse, one-click buys, wallet tracking, and Ghost mode buys funded privately through NEAR Intents.</p>
         <div class="cta-row">
           <a class="btn ink" href="./app.html">Launch terminal</a>
-          <a class="btn line" href="#trace">Check your exposure</a>
+          <a class="btn line" href="./docs.html">How it works</a>
         </div>
 
         <div class="assure"><span data-pixel="ghost" class="pg"></span><b>Non-custodial</b><span>You sign every trade in your own wallet</span></div>
@@ -221,19 +230,19 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
       <div class="leak-grid">
         <article class="leak-card">
           <div class="art" data-icon="funding"></div>
-          <div class="body"><h3>Where your SOL came from</h3><code>Funded by FrzG…rtmG · 2.5 SOL</code><p>A wallet's first deposit is its fingerprint. Every other wallet funded from the same place gets grouped with yours.</p></div>
+          <div class="body"><h3>Where your SOL came from</h3><code>First deposit → funder</code><p>A wallet's first deposit is its fingerprint. Every other wallet funded from the same place gets grouped with yours.</p></div>
         </article>
         <article class="leak-card">
           <div class="art" data-icon="serial"></div>
-          <div class="body"><h3>Who you are</h3><code>Withdrawal from Binance 2</code><p>Exchanges hold your passport. One withdrawal or deposit ties the wallet to your name in their records, and in any leak of them.</p></div>
+          <div class="body"><h3>Who you are</h3><code>Exchange deposits and withdrawals</code><p>Exchanges hold your passport. One withdrawal or deposit ties the wallet to your name in their records, and in any leak of them.</p></div>
         </article>
         <article class="leak-card">
           <div class="art" data-icon="linked"></div>
-          <div class="body"><h3>Your other wallets</h3><code>3 wallets · 41 transfers</code><p>Moving funds between your own wallets links them for good. A fresh wallet stops being fresh the moment you top it up.</p></div>
+          <div class="body"><h3>Your other wallets</h3><code>Two-way transfers</code><p>Moving funds between your own wallets links them for good. A fresh wallet stops being fresh the moment you top it up.</p></div>
         </article>
         <article class="leak-card">
           <div class="art" data-icon="clock"></div>
-          <div class="body"><h3>When you're awake</h3><code>Quiet 05:00–12:00 UTC</code><p>The hours you sign in, and the hours you don't, narrow you down to a time zone.</p></div>
+          <div class="body"><h3>When you're awake</h3><code>Signing hours</code><p>The hours you sign in, and the hours you don't, narrow you down to a time zone.</p></div>
         </article>
       </div>
     </section>
@@ -264,7 +273,11 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
         <div class="feat"><span data-pixel="link"></span><h3>Rebuild anywhere</h3><p>Ghost wallets come from one signature of your wallet. Sign again on any device to get them back. Nothing secret is stored.</p></div>
         <div class="feat"><span data-pixel="fuel"></span><h3>No fee trail</h3><p>The fee comes out of your main wallet when you fund. Ghosts never pay Ghostprint, so nothing on-chain marks them as ours.</p></div>
       </div>
-      <p class="band-note"><a class="btn primary" href="./app.html">Try Ghost mode in the terminal</a></p>
+      <figure class="route-fig">
+        <div class="art"><svg id="ghost-route" role="img" aria-label="Main wallet sends SOL to a one-time deposit address and the fee to the treasury; NEAR Intents routes it confidentially; the bridge pays a fresh ghost wallet, which swaps on Jupiter"></svg></div>
+        <figcaption><b>A ghost buy.</b> Your wallet pays a one-time deposit address. NEAR's bridge pays the ghost. Nothing on-chain runs from you to it.</figcaption>
+      </figure>
+      <p class="band-note"><a class="btn primary" href="./app.html">Try Ghost mode in the terminal</a> <a class="btn" href="./docs.html#ghost">Read how it works</a></p>
       <p class="band-note">Ghost mode is a toggle. When you need raw speed, trade normally. Nothing makes a wallet untraceable: funding and exit amounts and timing can still be matched, so vary them. Ghost mode makes tracing much more expensive.</p>
     </section>
 
@@ -296,7 +309,7 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
         <div class="tracer" id="tracer">
           <div class="sc-head">
             <span class="live"><i></i>Read-only tracer</span>
-            <span class="chip leak" id="tr-chip">Example · Exposed · 83</span>
+            <span class="chip busy" id="tr-chip">Ready</span>
           </div>
           <form class="tr-form" id="tr-form" autocomplete="off">
             <label class="sr" for="tr-addr">Solana wallet address</label>
@@ -310,7 +323,6 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
           <div class="sc-foot">
             <p class="sc-meta" id="tr-meta" aria-live="polite"></p>
             <div class="btns">
-              <button class="btn" id="tr-example" type="button" hidden>Show example</button>
               <button class="btn" id="tr-copy" type="button" disabled>Copy result</button>
             </div>
           </div>
@@ -328,7 +340,7 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
         <div class="step"><span class="n">STEP 3</span><h3>See the links</h3><p>Funding, exchanges, linked wallets, habits and poisoning attempts, scored the way trackers score them.</p></div>
       </div>
       <div class="strip-box">
-        <div class="strip-cap"><span>Signing hours for <b id="hr-name">the example wallet</b></span><span id="hr-zone"></span></div>
+        <div class="strip-cap"><span>Signing hours for <b id="hr-name">the wallet you trace</b></span><span id="hr-zone"></span></div>
         <div class="hours" id="hours" role="img" aria-label="Transactions signed per hour of the day, UTC"></div>
         <div class="strip-key"><span><i style="background:var(--ink)"></i>Transactions signed, by hour (UTC)</span><span><i style="background:var(--accent)"></i>Quietest 7 hours</span></div>
       </div>
@@ -342,555 +354,10 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
       <p class="big">A wallet should only show what you choose to sign.</p>
       <span data-pixel="word" class="word"></span>
     </div>
-    <p class="small">Ghostprint is in beta. The terminal routes swaps through Jupiter and never holds your funds: you sign every trade in your own wallet. Exposure is read-only. Ghost mode is in beta and the token is not live. Nothing here is financial advice or an offer to sell anything.</p>
+    <p class="small"><a href="./docs.html">Docs</a> · <a href="./app.html">Terminal</a> · <a href="#trace">Exposure</a><br><br>Ghostprint is in beta. The terminal routes swaps through Jupiter and never holds your funds: you sign every trade in your own wallet. Exposure is read-only. Ghost mode is in beta and the token is not live. Nothing here is financial advice or an offer to sell anything.</p>
   </footer>
 </div>
 
-<script type="module">
-import { trace, isAddress, short, DEFAULT_RPC } from "./trace.js";
-const NS = "http://www.w3.org/2000/svg";
-const cs = getComputedStyle(document.documentElement);
-const T = n => cs.getPropertyValue(n).trim();
-const INK = T("--ink"), PAPER = T("--paper"), ACCENT = T("--accent"), GROUND = T("--ground"),
-      FACE_L = T("--face-l"), FACE_R = T("--face-r"), MUTE_INK = T("--mute-ink"), INK3 = T("--ink-3");
-const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-function el(tag, attrs, parent) {
-  const e = document.createElementNS(NS, tag);
-  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
-  if (parent) parent.appendChild(e);
-  return e;
-}
-
-/* ---------- pixel art: logo, wordmark, feature glyphs ---------- */
-const FONT = {
-  G:[".###.","#...#","#....","#.###","#...#","#...#",".###."],
-  H:["#...#","#...#","#...#","#####","#...#","#...#","#...#"],
-  O:[".###.","#...#","#...#","#...#","#...#","#...#",".###."],
-  S:[".####","#....","#....",".###.","....#","....#","####."],
-  T:["#####","..#..","..#..","..#..","..#..","..#..","..#.."],
-  P:["####.","#...#","#...#","####.","#....","#....","#...."],
-  R:["####.","#...#","#...#","####.","#.#..","#..#.","#...#"],
-  I:["###",".#.",".#.",".#.",".#.",".#.","###"],
-  N:["#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"]
-};
-const GLYPHS = {
-  ghost:["...####...",".########.","##########","##..##..##","##..##..##","##########","##########","###....###","##########","##########","##.##.##.#","#..#..#..#"],
-  lock:["..####..",".#....#.",".#....#.","########","###..###","###..###","########","########"],
-  file:["#####...","#...##..","#...###.","#.....#.","#.###.#.","#.....#.","#.###.#.","#######."],
-  rotate:["..###..#",".#...#.#","#.....##","#...####","#.......","#......#",".#....#.","..####.."],
-  clock:["..####..",".#....#.","#...#..#","#...#..#","#...##.#","#......#",".#....#.","..####.."],
-  fuel:["#####...","#...#.#.","#...#..#","#####..#","#####..#","#####.##","#####...","######.."],
-  stairs:["......##","......##","....####","....####","..######","..######","########","########"],
-  flame:["...#....","...##...","..###...","..####.#",".#######",".###.###",".##...##","..#####."],
-  stack:["..####..","#......#",".######.","#......#",".######.","#......#",".######.","........"],
-  link:["..##....",".#..#...",".#..#...","..####..","....#..#","....#..#",".....##.","........"]
-};
-function pixelSVG(rows, cls) {
-  const cell = 10, gap = 1.4, h = rows.length, w = Math.max(...rows.map(r => r.length));
-  const svg = el("svg", { viewBox: `0 0 ${w*cell} ${h*cell}`, "aria-hidden": "true" });
-  if (cls) svg.setAttribute("class", cls);
-  rows.forEach((r, y) => [...r].forEach((c, x) => {
-    if (c === "#") el("rect", { x: x*cell + gap/2, y: y*cell + gap/2, width: cell - gap, height: cell - gap, fill: "currentColor" }, svg);
-  }));
-  return svg;
-}
-function wordRows(text) {
-  const rows = Array(7).fill("");
-  [...text].forEach((ch, i) => FONT[ch].forEach((r, y) => { rows[y] += (i ? "." : "") + r; }));
-  return rows;
-}
-document.querySelectorAll("[data-pixel]").forEach(host => {
-  const kind = host.dataset.pixel;
-  const svg = pixelSVG(kind === "word" ? wordRows("GHOSTPRINT") : GLYPHS[kind], host.getAttribute("class"));
-  host.replaceWith(svg);
-  // the nav wordmark assembles from scattered pixels on load
-  if (kind === "word" && svg.closest(".nav") && !REDUCE) {
-    const rects = [...svg.querySelectorAll("rect")];
-    rects.forEach(r => { r.style.transform = `translate(${(Math.random()-.5)*160}px,${(Math.random()-.5)*90}px)`; r.style.opacity = "0"; r.style.transitionDelay = (Math.random()*.35).toFixed(2)+"s"; });
-    requestAnimationFrame(() => requestAnimationFrame(() => rects.forEach(r => { r.style.transform = ""; r.style.opacity = ""; })));
-  }
-});
-
-/* ---------- isometric toolkit ---------- */
-function iso(ox, oy, s) {
-  const C = .8660254, P = (x, y, z) => [ox + (x - y)*C*s, oy + (x + y)*.5*s - z*s];
-  const pts = a => a.map(p => P(p[0], p[1], p[2]).map(n => n.toFixed(1)).join(",")).join(" ");
-  const NSS = { "vector-effect": "non-scaling-stroke" };
-  const api = {
-    P, pts,
-    poly(parent, a, attrs) { return el("polygon", Object.assign({ points: pts(a), "stroke-linejoin": "round" }, attrs), parent); },
-    line(parent, a, attrs) { return el("polyline", Object.assign({ points: pts(a), fill: "none", "stroke-linejoin": "round", "stroke-linecap": "round" }, attrs), parent); },
-    box(parent, x, y, z, w, d, h, st = {}) {
-      const g = el("g", { stroke: st.stroke || INK, "stroke-width": st.sw || 1.4 }, parent);
-      api.poly(g, [[x,y+d,z],[x+w,y+d,z],[x+w,y+d,z+h],[x,y+d,z+h]], { fill: st.left || FACE_L });
-      api.poly(g, [[x+w,y,z],[x+w,y+d,z],[x+w,y+d,z+h],[x+w,y,z+h]], { fill: st.right || FACE_R });
-      api.poly(g, [[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]], { fill: st.top || PAPER });
-      return g;
-    },
-    cyl(parent, cx, cy, z, r, h, st = {}) {
-      const g = el("g", { stroke: st.stroke || INK, "stroke-width": st.sw || 1.4 }, parent);
-      const [x0, y0] = P(cx, cy, z), [x1, y1] = P(cx, cy, z + h), rx = 1.2247*r*s, ry = .7071*r*s;
-      el("path", { d: `M${x1-rx},${y1} L${x0-rx},${y0} A${rx},${ry} 0 0 0 ${x0+rx},${y0} L${x1+rx},${y1} Z`, fill: st.side || FACE_R }, g);
-      el("ellipse", { cx: x1, cy: y1, rx, ry, fill: st.top || PAPER }, g);
-      return g;
-    },
-    // 2D drawing planes mapped onto iso faces. top: (x,y) at height z. left: face y=Y, local (x,-z). right: face x=X, local (-y,-z)
-    topM: z => `matrix(${C*s},${.5*s},${-C*s},${.5*s},${ox},${oy - z*s})`,
-    leftM: Y => `matrix(${C*s},${.5*s},0,${s},${ox - C*s*Y},${oy + .5*s*Y})`,
-    rightM: X => `matrix(${C*s},${-.5*s},0,${s},${ox + C*s*X},${oy + .5*s*X})`,
-    plane(parent, m) { return el("g", { transform: m }, parent); },
-    NSS
-  };
-  return api;
-}
-const NSS = { "vector-effect": "non-scaling-stroke" };
-
-/* ---------- hero machine ---------- */
-const anim = [];
-(function buildMachine() {
-  const svg = document.getElementById("machine");
-  const I = iso(300, 330, .85), { P, poly, line, box, cyl, plane, topM, leftM, rightM } = I;
-
-  // halftone field
-  const ht = el("g", { fill: INK }, svg);
-  for (let row = 0, y = 34; y < 330; y += 9, row++)
-    for (let x = 20 + (row % 2 ? 4.5 : 0); x < 340; x += 9) {
-      const r = 2.5 - Math.hypot(x - 150, y - 150) / 70;
-      if (r > .35) el("circle", { cx: x.toFixed(1), cy: y, r: r.toFixed(2) }, ht);
-    }
-
-  // floor cables (drawn before props they plug into)
-  const cables = el("g", {}, svg);
-  function cable(pts) {
-    line(cables, pts, { stroke: INK, "stroke-width": 9 });
-    line(cables, pts, { stroke: PAPER, "stroke-width": 4.5 });
-    const flow = line(cables, pts, { stroke: ACCENT, "stroke-width": 2, "stroke-dasharray": "2 16" });
-    anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*28).toFixed(1)));
-  }
-
-  // base: black underside, platform, step
-  box(svg, -130, -130, -9, 260, 260, 9, { top: INK, left: INK, right: INK });
-  box(svg, -130, -130, 0, 260, 260, 18);
-  [[-100, 70], [30, 70]].forEach(([u, w]) => {
-    el("rect", Object.assign({ x: u, y: -13, width: w, height: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), plane(svg, leftM(130)));
-    el("rect", Object.assign({ x: u, y: -13, width: w, height: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), plane(svg, rightM(130)));
-  });
-  const deck = plane(svg, topM(18));
-  el("rect", Object.assign({ x: -120, y: -120, width: 240, height: 240, fill: "none", stroke: INK, "stroke-width": 1, "stroke-dasharray": "3 5" }, NSS), deck);
-  box(svg, -104, -104, 18, 208, 208, 8);
-
-  cable([[130, 95, 7], [205, 95, 7], [205, 170, 7], [260, 170, 7]]);
-  cable([[130, -8, 7], [182, -8, 7]]);
-
-  // shredder bin (right)
-  box(svg, 180, -44, 0, 54, 54, 46);
-  el("rect", { x: 189, y: -26, width: 36, height: 9, fill: INK }, plane(svg, topM(46)));
-  const binFace = plane(svg, leftM(10));
-  el("rect", Object.assign({ x: 188, y: -34, width: 38, height: 13, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), binFace);
-  const binTxt = el("text", { x: 207, y: -24.5, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 8, "font-weight": 700, fill: INK }, binFace);
-  binTxt.textContent = "LINK→0";
-  const bits = el("g", {}, svg);
-  for (let i = 0; i < 3; i++) {
-    const b = el("rect", { width: 6, height: 6, fill: ACCENT, stroke: INK, "stroke-width": 1 }, bits);
-    anim.push(t => {
-      const p = (t*.7 + i/3) % 1, [x, y] = P(207, -22, 110 - p*64);
-      b.setAttribute("x", (x - 3 + Math.sin(i*2 + t)*3).toFixed(1)); b.setAttribute("y", (y - 3).toFixed(1));
-      b.setAttribute("opacity", p > .92 ? 0 : 1);
-    });
-  }
-
-  // chamber floor, back posts and back glass
-  poly(svg, [[-56,-56,26],[56,-56,26],[56,56,26],[-56,56,26]], { fill: ACCENT, "fill-opacity": .28, stroke: INK, "stroke-width": 1.2 });
-  box(svg, -62, -62, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
-  poly(svg, [[-56,-56,26],[-56,56,26],[-56,56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
-  poly(svg, [[-56,-56,26],[56,-56,26],[56,-56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
-
-  // floating wallet card on the y=0 plane
-  const cardPlane = plane(svg, leftM(0));
-  const card = el("g", {}, cardPlane);
-  el("rect", Object.assign({ x: -40, y: -164, width: 80, height: 98, rx: 3, fill: PAPER, stroke: INK, "stroke-width": 1.5 }, NSS), card);
-  el("rect", { x: -34, y: -158, width: 68, height: 58, fill: INK }, card);
-  [[-108, -113], [-113, -110], [-110, -121], [-121, -117], [-117, -129], [-129, -125], [-125, -139], [-139, -147]].forEach(([o, c], i) => {
-    const x = -29 + i*8, up = c < o;
-    el("line", { x1: x + 2.5, y1: Math.min(o, c) - 3, x2: x + 2.5, y2: Math.max(o, c) + 3, stroke: up ? ACCENT : MUTE_INK, "stroke-width": 1 }, card);
-    el("rect", { x, y: Math.min(o, c), width: 5, height: Math.abs(o - c), fill: up ? ACCENT : MUTE_INK }, card);
-  });
-  for (let y = -155; y < -100; y += 4) for (let x = -31; x < 34; x += 4) el("circle", { cx: x, cy: y, r: .7, fill: PAPER, "fill-opacity": .12 }, card);
-  el("rect", { x: -34, y: -93, width: 40, height: 4, fill: INK }, card);
-  el("rect", { x: -34, y: -85, width: 26, height: 4, fill: MUTE_INK }, card);
-  const badge = el("g", {}, card);
-  el("rect", Object.assign({ x: 12, y: -95, width: 22, height: 11, rx: 2, fill: ACCENT, stroke: INK, "stroke-width": 1 }, NSS), badge);
-  const bt = el("text", { x: 23, y: -86.8, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 7, "font-weight": 700, fill: INK }, badge);
-  bt.textContent = "TX";
-
-  // scan plane
-  const scan = el("polygon", { fill: ACCENT, "fill-opacity": .2, stroke: ACCENT, "stroke-width": 1.6 }, svg);
-  let scanZ = 30;
-  anim.push(t => {
-    scanZ = 32 + (Math.sin(t*.9 - 1.5)*.5 + .5)*158;
-    scan.setAttribute("points", I.pts([[-55,-55,scanZ],[55,-55,scanZ],[55,55,scanZ],[-55,55,scanZ]]));
-    card.setAttribute("transform", `translate(0,${(Math.sin(t*1.3)*3).toFixed(2)})`);
-    // badge sits around z≈80; it switches off once the scan plane has passed it
-    badge.setAttribute("opacity", scanZ > 84 ? .12 : 1);
-  });
-
-  // front glass, glare, front posts
-  poly(svg, [[-56,56,26],[56,56,26],[56,56,196],[-56,56,196]], { fill: PAPER, "fill-opacity": .16, stroke: INK, "stroke-width": 1.2 });
-  poly(svg, [[56,-56,26],[56,56,26],[56,56,196],[56,-56,196]], { fill: PAPER, "fill-opacity": .2, stroke: INK, "stroke-width": 1.2 });
-  const glare = plane(svg, leftM(56));
-  el("line", Object.assign({ x1: -44, y1: -60, x2: -14, y2: -160, stroke: "#fff", "stroke-width": 3, "stroke-opacity": .7, "stroke-linecap": "round" }, NSS), glare);
-  el("line", Object.assign({ x1: -30, y1: -52, x2: -20, y2: -86, stroke: "#fff", "stroke-width": 2, "stroke-opacity": .6, "stroke-linecap": "round" }, NSS), glare);
-  box(svg, 56, -62, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
-  box(svg, -62, 56, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
-  box(svg, 56, 56, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
-
-  // cap with vents, status lights and exhaust port
-  box(svg, -68, -68, 196, 136, 136, 24);
-  const vents = plane(svg, leftM(68));
-  for (let x = -54; x <= 54; x += 9) el("line", Object.assign({ x1: x, y1: -217, x2: x, y2: -203, stroke: INK, "stroke-width": 1.4 }, NSS), vents);
-  const lights = plane(svg, rightM(68)), leds = [];
-  for (let i = 0; i < 6; i++) leds.push(el("rect", Object.assign({ x: -48 + i*12, y: -214, width: 8, height: 7, fill: INK, stroke: INK, "stroke-width": 1 }, NSS), lights));
-  anim.push(t => { const k = Math.floor(t*5) % 6; leds.forEach((r, i) => r.setAttribute("fill", i === k || i === (k+1)%6 ? ACCENT : INK)); });
-  cyl(svg, 0, 0, 220, 26, 7, { top: INK });
-  el("circle", Object.assign({ cx: 0, cy: 0, r: 16, fill: "none", stroke: ACCENT, "stroke-width": 2 }, NSS), plane(svg, topM(227)));
-
-  // intake tray (front-left) with its cable
-  box(svg, -66, 168, 0, 72, 56, 16);
-  const tray = plane(svg, topM(16));
-  el("rect", Object.assign({ x: -56, y: 176, width: 52, height: 40, fill: PAPER, stroke: INK, "stroke-width": 1.2 }, NSS), tray);
-  el("polyline", Object.assign({ points: "-52,210 -40,194 -32,203 -22,188 -8,210", fill: "none", stroke: INK, "stroke-width": 1.2 }, NSS), tray);
-  cable([[6, 196, 7], [64, 196, 7], [64, 132, 7]]);
-
-  // the links a tracker draws, rising out of the port
-  const chipTexts = ["FUNDER FrzG…rtmG", "BINANCE 2", "PNL +412%", "AWAKE UTC−5"];
-  const chips = el("g", { "font-family": "JetBrains Mono, monospace", "font-size": 10 }, svg);
-  chipTexts.forEach((txt, i) => {
-    const g = el("g", {}, chips), w = txt.length*6.1 + 14;
-    el("rect", { x: -w/2, y: -10, width: w, height: 20, rx: 5, fill: INK, stroke: ACCENT, "stroke-width": 1.4 }, g);
-    const tx = el("text", { x: 0, y: 3.5, "text-anchor": "middle", fill: PAPER }, g);
-    tx.textContent = txt;
-    const side = i % 2 ? 1 : -1;
-    anim.push(t => {
-      const p = ((t + i*1.5) / 6) % 1, [x, y] = P(0, 0, 236 + p*110);
-      const a = p < .1 ? p/.1 : Math.max(0, 1 - (p - .1)/.6);
-      g.setAttribute("transform", `translate(${(x + side*(58 + p*40)).toFixed(1)},${y.toFixed(1)})`);
-      g.setAttribute("opacity", a.toFixed(2));
-    });
-  });
-})();
-
-/* ---------- small iso icons for the leak cards ---------- */
-const ICONS = {
-  funding(svg, I) {
-    const { box, cyl, line } = I;
-    const tube = [[-44, 10, 6], [40, 10, 6]];
-    line(svg, tube, { stroke: INK, "stroke-width": 9 });
-    line(svg, tube, { stroke: PAPER, "stroke-width": 4.5 });
-    const flow = line(svg, tube, { stroke: ACCENT, "stroke-width": 2, "stroke-dasharray": "2 12" });
-    anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*22).toFixed(1)));
-    box(svg, -92, -14, 0, 48, 48, 36);
-    [36, 41, 46].forEach((z, i) => cyl(svg, -68, 10, z, 13, 5, i === 2 ? { top: ACCENT } : {}));
-    box(svg, 40, -14, 0, 48, 48, 36);
-    cyl(svg, 64, 10, 36, 13, 5, { top: ACCENT });
-  },
-  linked(svg, I) {
-    const { box, line } = I;
-    const spots = [[-70, -40], [30, -50], [-20, 40]];
-    const c = ([x, y]) => [x + 18, y + 18, 6];
-    [[0, 1], [1, 2], [2, 0]].forEach(([a, b], i) => {
-      const pts = [c(spots[a]), [c(spots[b])[0], c(spots[a])[1], 6], c(spots[b])];
-      line(svg, pts, { stroke: INK, "stroke-width": 8 });
-      line(svg, pts, { stroke: PAPER, "stroke-width": 4 });
-      const flow = line(svg, pts, { stroke: ACCENT, "stroke-width": 1.8, "stroke-dasharray": "2 12" });
-      anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*20 - i*5).toFixed(1)));
-    });
-    spots.forEach(([x, y], i) => box(svg, x, y, 0, 36, 36, 30, i === 0 ? { top: ACCENT } : {}));
-  },
-  clock(svg, I) {
-    const { cyl, plane, topM } = I;
-    cyl(svg, 0, 0, 0, 64, 14);
-    const face = plane(svg, topM(14));
-    for (let i = 0; i < 12; i++) {
-      const a = i*Math.PI/6, r1 = i % 3 ? 52 : 46;
-      el("line", Object.assign({ x1: Math.cos(a)*r1, y1: Math.sin(a)*r1, x2: Math.cos(a)*58, y2: Math.sin(a)*58, stroke: INK, "stroke-width": i % 3 ? 1 : 2 }, NSS), face);
-    }
-    el("line", Object.assign({ x1: 0, y1: 0, x2: -30, y2: -16, stroke: INK, "stroke-width": 3, "stroke-linecap": "round" }, NSS), face);
-    el("line", Object.assign({ x1: 0, y1: 0, x2: 34, y2: -30, stroke: ACCENT, "stroke-width": 3, "stroke-linecap": "round" }, NSS), face);
-    el("circle", { cx: 0, cy: 0, r: 4, fill: INK }, face);
-  },
-  serial(svg, I) {
-    const { box, plane, topM } = I;
-    box(svg, -50, -50, 0, 116, 72, 6, { top: GROUND });
-    box(svg, -62, -26, 12, 116, 72, 6);
-    const tag = plane(svg, topM(18));
-    let x = -52;
-    [2,1,3,1,1,2,4,1,2,1,3,2,1,1,3,1,2,2,1,3].forEach((w, i) => { if (i % 2 === 0) el("rect", { x, y: -16, width: w*2.2, height: 40, fill: INK }, tag); x += w*2.2 + 1; });
-    el("circle", Object.assign({ cx: 40, cy: 10, r: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.4 }, NSS), tag);
-  }
-};
-document.querySelectorAll("[data-icon]").forEach(host => {
-  const svg = el("svg", { viewBox: "0 0 240 150", "aria-hidden": "true" });
-  ICONS[host.dataset.icon](svg, iso(120, 92, .62));
-  host.appendChild(svg);
-});
-
-/* ---------- the tracer instrument ---------- */
-const $ = id => document.getElementById(id);
-// A made-up wallet, produced by running trace.js against the test chain in test/mockchain.mjs.
-const SAMPLE = {"address": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "score": 83, "grade": "Exposed", "findings": [{"g": "Identity", "sev": "high", "k": "Exchange", "v": "Withdrawal from Binance 2 · +1 more", "why": "Exchanges hold your ID. One link ties this wallet to your name in their records."}, {"g": "Funding", "sev": "high", "k": "Funded by", "v": "FrzG…rtmG · 2.500 SOL", "why": "Trackers group every wallet that shares a funder."}, {"g": "Cluster", "sev": "high", "k": "Siblings", "v": "3 other wallets share your funder", "why": "Wallets funded from one source are treated as one owner."}, {"g": "Cluster", "sev": "high", "k": "Linked", "v": "1 wallet · 8kEF…8oXc", "why": "Funds go both ways, 5 transfers."}, {"g": "Warning", "sev": "warn", "k": "Poisoning", "v": "8kEF6vud…8oXc fakes 8kEFmWgv…8oXc", "why": "A lookalike address sent you dust so you copy it by mistake. Never copy addresses from your history."}, {"g": "Trading", "sev": "med", "k": "Trades", "v": "40 recent swaps · 12 tokens", "why": "Every entry and exit is public. Copy-traders can follow it in seconds."}, {"g": "Habits", "sev": "med", "k": "Awake", "v": "Quiet 05:00–12:00 UTC → UTC−5 ±2 · Americas", "why": "When you sign gives away roughly where you live."}, {"g": "Holdings", "sev": "med", "k": "Balance", "v": "42.14 SOL + 17 tokens visible", "why": "Anyone you pay can see this."}], "graph": {"nodes": [{"id": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "kind": "you", "label": "YOU"}, {"id": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9", "kind": "exchange", "label": "BINANCE 2", "weight": 1}, {"id": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d", "kind": "deposit", "label": "DEPOSIT", "weight": 1}, {"id": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "kind": "funder", "label": "FUNDER", "weight": 1}, {"id": "siblings", "kind": "siblings", "label": "SIBLINGS ×3", "weight": 3}, {"id": "8kEFmWgvuMw358VA4fGLd1Ma7ogT1VMiwBLoeEmY8oXc", "kind": "linked", "label": "8kEF…8oXc", "weight": 6}], "edges": [{"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"}, {"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d"}, {"a": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d", "b": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"}, {"a": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "b": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL"}, {"a": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "b": "siblings"}, {"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "8kEFmWgvuMw358VA4fGLd1Ma7ogT1VMiwBLoeEmY8oXc"}]}, "hours": {"histogram": [2, 3, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 4, 2, 3, 2, 6, 2, 3, 3], "quietStart": 5, "zone": "UTC−5 ±2 · Americas"}, "scanned": 49, "signatureCount": 49};
-
-const cv = $("tr-canvas"), ctx = cv.getContext("2d");
-const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
-const ACC = rgb(ACCENT), PAP = rgb(PAPER), MUT = rgb(MUTE_INK);
-const mix = (from, h) => `rgb(${from.map((c, i) => Math.round(c + (ACC[i] - c)*h)).join(",")})`;
-const COL = { paper: PAPER, acc: ACCENT, mute: MUTE_INK };
-const G = { W: 0, H: 0, dots: [], grid: [], edges: [], labels: [], you: { x: 0, y: 0 }, phase: "done", result: SAMPLE, start: 0, frac: 0, shown: 0 };
-const RAD = { you: 24, exchange: 16, funder: 14, linked: 10, deposit: 8 };
-const RING = { funder: 0, siblings: 1, exchange: 2, linked: 3 };
-
-function disc(cx, cy, R, col, out) {
-  const p = 4.2, rows = Math.ceil(R/(p*.866));
-  for (let row = -rows; row <= rows; row++) {
-    const y = row*p*.866;
-    for (let x = -R + (row & 1 ? p/2 : 0); x <= R; x += p) {
-      const d = Math.hypot(x, y);
-      if (d <= R) out.push({ tx: cx + x, ty: cy + y, tr: 1.7*(1 - .5*(d/R)**2), col });
-    }
-  }
-}
-
-function layout() {
-  const { W, H } = G;
-  if (!W) return;
-  const s = Math.min(1, W/460), you = G.you = { x: Math.max(44, W*.2), y: H*.48 };
-  G.grid = [];
-  for (let row = 0, y = 6; y < H; y += 8, row++) for (let x = row % 2 ? 6 : 10; x < W; x += 8) G.grid.push({ x, y, d: Math.hypot(x - you.x, y - you.y) });
-  const g = G.result.graph, pos = new Map(), rad = new Map(), targets = [], labels = [];
-  const me = g.nodes.find(n => n.kind === "you");
-  pos.set(me.id, you); rad.set(me.id, RAD.you*s);
-  const ring = g.nodes.filter(n => n.kind in RING).sort((a, b) => RING[a.kind] - RING[b.kind]);
-  const rx = W - you.x - 52*s, ry = H*.38;
-  ring.forEach((n, i) => {
-    const a = ring.length === 1 ? 0 : -1 + 2*i/(ring.length - 1);
-    pos.set(n.id, { x: you.x + Math.cos(a)*rx, y: you.y + Math.sin(a)*ry });
-    rad.set(n.id, (n.kind === "linked" ? RAD.linked + Math.min(4, Math.max(0, (n.weight || 3) - 3)) : RAD[n.kind] || 13)*s);
-  });
-  // a deposit address sits on the way to the exchange it sweeps into
-  for (const n of g.nodes.filter(n => n.kind === "deposit")) {
-    const e = g.edges.find(e => e.a === n.id && pos.has(e.b)), to = e ? pos.get(e.b) : { x: you.x + rx*.6, y: you.y };
-    pos.set(n.id, { x: you.x + (to.x - you.x)*.5, y: you.y + (to.y - you.y)*.5 - 16*s });
-    rad.set(n.id, RAD.deposit*s);
-  }
-  for (const n of g.nodes) {
-    const p = pos.get(n.id);
-    if (!p) continue;
-    const col = n.kind === "exchange" ? "acc" : n.kind === "deposit" || n.kind === "siblings" ? "mute" : "paper";
-    if (n.kind === "siblings") {
-      const k = Math.min(7, n.weight || 3), rr = Math.max(11, 13*s);
-      for (let i = 0; i < k; i++) { const a = i/k*6.283 - 1.57; disc(p.x + Math.cos(a)*rr, p.y + Math.sin(a)*rr*.8, Math.max(5, 5.5*s), col, targets); }
-      rad.set(n.id, rr + 6);
-    } else disc(p.x, p.y, rad.get(n.id), col, targets);
-    labels.push({ x: p.x, y: n.kind === "deposit" ? p.y - rad.get(n.id) - 6 : p.y + rad.get(n.id) + 12, text: n.label, acc: n.kind === "exchange" });
-  }
-  G.labels = labels;
-  G.edges = [];
-  for (const e of g.edges) {
-    const A = pos.get(e.a), B = pos.get(e.b);
-    if (!A || !B) continue;
-    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ra = rad.get(e.a) + 5, rb = rad.get(e.b) + 5, pts = [];
-    for (let d = ra; d <= L - rb; d += 6) pts.push({ x: A.x + dx*d/L, y: A.y + dy*d/L, f: (d - ra)/Math.max(1, L - ra - rb) });
-    G.edges.push({ pts, ph: (G.edges.length*.37) % 1 });
-  }
-  targets.forEach((t, i) => {
-    let d = G.dots[i];
-    if (!d) { d = { x: you.x, y: you.y, vx: 0, vy: 0, r: 0, heat: 1 }; G.dots.push(d); }
-    Object.assign(d, t, { out: false });
-  });
-  for (let i = targets.length; i < G.dots.length; i++) { G.dots[i].out = true; G.dots[i].tr = 0; }
-  if (REDUCE) for (const d of G.dots) { d.x = d.tx; d.y = d.ty; d.r = d.tr; d.heat = 0; }
-}
-
-let running = false, visible = true;
-function frame(now) {
-  running = false;
-  if (!visible || document.hidden) return;
-  const { W, H } = G, t = now/1000, tracing = G.phase === "tracing";
-  ctx.clearRect(0, 0, W, H);
-  // background lattice; while tracing, a radar ring sweeps out from the wallet
-  const ring = tracing && !REDUCE ? ((now - G.start)/1600 % 1)*Math.hypot(W, H) : -99;
-  const hotGrid = [];
-  ctx.fillStyle = INK3; ctx.beginPath();
-  for (const p of G.grid) {
-    if (Math.abs(p.d - ring) < 12) { hotGrid.push(p); continue; }
-    ctx.moveTo(p.x + .8, p.y); ctx.arc(p.x, p.y, .8, 0, 6.283);
-  }
-  ctx.fill();
-  if (hotGrid.length) { ctx.fillStyle = ACCENT; ctx.beginPath(); for (const p of hotGrid) { ctx.moveTo(p.x + 1.2, p.y); ctx.arc(p.x, p.y, 1.2, 0, 6.283); } ctx.fill(); }
-  // edges carry a pulse in the direction funds moved
-  for (const e of G.edges) {
-    const at = REDUCE ? -9 : (t*.4 + e.ph) % 1;
-    for (const p of e.pts) {
-      const h = Math.max(0, 1 - Math.abs(p.f - at)*6);
-      ctx.fillStyle = h ? mix(MUT, h) : MUTE_INK;
-      ctx.beginPath(); ctx.arc(p.x, p.y, .9 + h*.9, 0, 6.283); ctx.fill();
-    }
-  }
-  // node particles: settled ones batched by colour, hot ones one by one
-  const batches = { paper: [], acc: [], mute: [] }, hot = [];
-  let removed = false;
-  for (const d of G.dots) {
-    if (!REDUCE) { d.vx = (d.vx + (d.tx - d.x)*.07)*.8; d.vy = (d.vy + (d.ty - d.y)*.07)*.8; d.x += d.vx; d.y += d.vy; d.r += (d.tr - d.r)*.12; }
-    if (d.heat > 0) d.heat = Math.max(0, d.heat - (REDUCE ? 1 : .02));
-    if (d.out && d.r < .1) { removed = true; continue; }
-    if (d.r < .15) continue;
-    (d.heat > .03 ? hot : batches[d.col]).push(d);
-  }
-  for (const k in batches) {
-    if (!batches[k].length) continue;
-    ctx.fillStyle = COL[k]; ctx.beginPath();
-    for (const d of batches[k]) { ctx.moveTo(d.x + d.r, d.y); ctx.arc(d.x, d.y, d.r, 0, 6.283); }
-    ctx.fill();
-  }
-  for (const d of hot) { ctx.fillStyle = mix(d.col === "mute" ? MUT : PAP, d.heat); ctx.beginPath(); ctx.arc(d.x, d.y, d.r*(1 + d.heat*.3), 0, 6.283); ctx.fill(); }
-  if (removed) G.dots = G.dots.filter(d => !(d.out && d.r < .1));
-  // labels
-  ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
-  if (!tracing) for (const l of G.labels) {
-    const w = ctx.measureText(l.text).width/2 + 4;
-    ctx.fillStyle = l.acc ? ACCENT : MUTE_INK;
-    ctx.fillText(l.text, Math.min(W - w, Math.max(w, l.x)), Math.min(H - 4, l.y));
-  }
-  // readout
-  ctx.textAlign = "left"; ctx.fillStyle = MUTE_INK; ctx.font = "500 9px 'JetBrains Mono', monospace";
-  ctx.fillText(tracing ? "TRACING" : "EXPOSURE", 12, 18);
-  ctx.font = "700 24px 'JetBrains Mono', monospace";
-  if (tracing) { ctx.fillStyle = PAPER; ctx.fillText(`${Math.round(G.frac*100)}%`, 12, 44); }
-  else if (G.result.score !== undefined) {
-    G.shown += (G.result.score - G.shown)*(REDUCE ? 1 : .08);
-    if (Math.abs(G.result.score - G.shown) < .5) G.shown = G.result.score;
-    ctx.fillStyle = G.result.score >= 50 ? ACCENT : PAPER;
-    ctx.fillText(String(Math.round(G.shown)), 12, 44);
-    ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.fillStyle = MUTE_INK;
-    ctx.fillText(`/100 ${G.result.grade.toUpperCase()}`, 12, 58);
-  }
-  kick();
-}
-function kick() { if (!running) { running = true; requestAnimationFrame(frame); } }
-function resize() {
-  const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
-  G.W = r.width; G.H = r.height; cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  layout(); kick();
-}
-new ResizeObserver(resize).observe(cv);
-new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).observe(cv);
-document.addEventListener("visibilitychange", kick);
-
-/* ---------- UI state ---------- */
-const form = $("tr-form"), addrIn = $("tr-addr"), go = $("tr-go"), chip = $("tr-chip"), list = $("tr-fields"), meta = $("tr-meta");
-const copyBtn = $("tr-copy"), exampleBtn = $("tr-example"), rpcIn = $("tr-rpc");
-const pad = n => String(n).padStart(2, "0");
-
-function setChip(text, cls) { chip.textContent = text; chip.className = "chip " + cls; }
-function setMeta(parts) { meta.textContent = ""; parts.forEach(p => { if (typeof p === "string") meta.append(p); else { const b = document.createElement("b"); b.textContent = p.b; meta.append(b); } }); }
-function note(text) { list.textContent = ""; const li = document.createElement("li"); li.className = "empty"; li.textContent = text; list.appendChild(li); }
-
-function renderFindings(fs) {
-  list.textContent = "";
-  for (const f of fs) {
-    const li = document.createElement("li");
-    li.className = "sev-" + f.sev;
-    for (const [c, t] of [["k", f.k], ["v", f.v], ["g", f.sev === "warn" ? "Warning" : f.g], ["why", f.why]]) {
-      const s = document.createElement("span"); s.className = c; s.textContent = t; li.appendChild(s);
-    }
-    list.appendChild(li);
-  }
-}
-
-function renderHours(h, name) {
-  const host = $("hours"), max = Math.max(1, ...h.histogram);
-  host.textContent = "";
-  h.histogram.forEach((n, i) => {
-    const col = document.createElement("div"), bw = document.createElement("div"), bar = document.createElement("div"), lab = document.createElement("div");
-    col.className = "col" + (h.zone && (i - h.quietStart + 24) % 24 < 7 ? " q" : "");
-    col.title = `${pad(i)}:00 UTC · ${n} signed`;
-    bw.className = "bw"; bar.className = "bar"; bar.style.height = `${(n/max*100).toFixed(1)}%`;
-    lab.className = "h"; lab.textContent = i % 3 ? "" : pad(i);
-    bw.appendChild(bar); col.append(bw, lab); host.appendChild(col);
-  });
-  $("hr-name").textContent = name;
-  $("hr-zone").textContent = h.zone ? `Quiet ${pad(h.quietStart)}:00–${pad((h.quietStart + 7) % 24)}:00 UTC → ${h.zone}` : "Not enough signed transactions to place a time zone";
-}
-
-function show(res, example) {
-  G.result = res; G.phase = "done"; G.shown = 0;
-  for (const d of G.dots) d.heat = .9;
-  layout(); kick();
-  renderFindings(res.findings);
-  renderHours(res.hours, example ? "the example wallet" : short(res.address));
-  setChip(`${example ? "Example · " : ""}${res.grade} · ${res.score}`, res.score >= 50 ? "leak" : res.score >= 25 ? "busy" : "clean");
-  if (example) setMeta(["Example wallet, made up for this demo. ", { b: "Paste any address" }, " to trace a real one."]);
-  else setMeta([{ b: short(res.address) }, ` · read ${res.scanned} of ${res.signatureCount}${res.reachedStart ? "" : "+"} transactions${res.reachedStart ? ", back to its first" : ". Its first transactions are older than this window"}.`]);
-  copyBtn.disabled = example; exampleBtn.hidden = example;
-}
-
-const RPC_KEY = "ghostprint-rpc";
-try { rpcIn.value = localStorage.getItem(RPC_KEY) || DEFAULT_RPC; } catch (_) { rpcIn.value = DEFAULT_RPC; }
-rpcIn.addEventListener("change", () => { try { localStorage.setItem(RPC_KEY, rpcIn.value.trim()); } catch (_) {} });
-const rpcUrl = () => /^https?:\/\/\S+$/.test(rpcIn.value.trim()) ? rpcIn.value.trim() : DEFAULT_RPC;
-
-function progress(p) {
-  if (p.step === "history") { G.frac = .05; setMeta(["Reading the wallet's history…"]); }
-  else if (p.step === "transactions") { G.frac = .1 + .7*p.done/Math.max(1, p.total); setMeta([`Reading transactions ${p.done}/${p.total}`]); }
-  else if (p.step === "neighbours") { G.frac = .8 + .2*p.done/Math.max(1, p.total); setMeta([`Checking neighbouring wallets ${p.done}/${p.total}`]); }
-}
-
-let busy = false;
-form.addEventListener("submit", async e => {
-  e.preventDefault();
-  if (busy) return;
-  const a = addrIn.value.trim();
-  if (!isAddress(a)) {
-    setChip("Not an address", "busy");
-    setMeta(["Paste a Solana wallet address: 32 to 44 letters and numbers, like ", { b: "5tzF…uAi9" }, "."]);
-    addrIn.focus();
-    return;
-  }
-  busy = true; go.disabled = copyBtn.disabled = true;
-  G.result = { address: a, graph: { nodes: [{ id: a, kind: "you", label: "YOU" }], edges: [] } };
-  G.phase = "tracing"; G.start = performance.now(); G.frac = 0;
-  layout(); kick();
-  note("Reading public history…");
-  setChip("Tracing…", "busy");
-  try {
-    show(await trace(a, { url: rpcUrl(), onProgress: progress }), false);
-  } catch (err) {
-    G.phase = "done";
-    setChip("Can't read", "busy");
-    setMeta([err && err.message ? err.message : "Something went wrong reading the chain."]);
-    note("No result. Check the address and the RPC node, then try again.");
-    exampleBtn.hidden = false;
-  } finally { busy = false; go.disabled = false; }
-});
-
-exampleBtn.addEventListener("click", () => { if (!busy) show(SAMPLE, true); });
-
-// Shareable summary. Addresses are masked so a copied result doesn't link wallets for anyone.
-copyBtn.addEventListener("click", async () => {
-  const r = G.result;
-  if (!r || !r.findings) return;
-  const mask = s => s.replace(/[1-9A-HJ-NP-Za-km-z]{4,8}…[1-9A-HJ-NP-Za-km-z]{4}/g, "••••");
-  const text = [`My Solana wallet exposure on Ghostprint: ${r.score}/100 (${r.grade})`, ...r.findings.map(f => `· ${f.k}: ${mask(f.v)}`), location.href.split("#")[0]].join("\n");
-  try { await navigator.clipboard.writeText(text); setMeta(["Copied. Wallet addresses are masked."]); }
-  catch (_) { setMeta(["Couldn't reach the clipboard in this view."]); }
-});
-
-/* ---------- boot ---------- */
-show(SAMPLE, true);
-let t0 = performance.now();
-function machineLoop(now) { const t = (now - t0)/1000; anim.forEach(f => f(t)); if (!REDUCE) requestAnimationFrame(machineLoop); }
-requestAnimationFrame(machineLoop);
-</script>
+<script type="module" src="./landing.js"></script>
 </body>
 </html>
