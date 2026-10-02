@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Ghostprint strips GPS, device, time and serial metadata from photos, entirely in your browser.">
+</head>
+<body>
+<title>Ghostprint</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: light-grey workbench page; ink panels hold live instruments; a code-drawn isometric machine is the hero; one infrared accent marks anything that leaks or gets scrubbed */
+:root{
+  --ground:#D6D8D9;
+  --paper:#EEEFEE;
+  --ink:#1D1F22;
+  --ink-2:#26292D;
+  --ink-3:#31353A;
+  --mute:#5F646B;
+  --mute-ink:#9A9EA5;
+  --accent:#FF5A24;
+  --face-l:#C6C9CB;
+  --face-r:#AFB3B6;
+  --font-display:"Sora","Segoe UI",system-ui,sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --r:12px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--font-display);font-size:16px;line-height:1.55;padding-inline:clamp(16px,3vw,32px);padding-block:12px 48px;overflow-x:hidden}
+.wrap{max-width:1180px;margin-inline:auto}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* nav */
+.nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 12px;border:1.5px solid var(--ink);border-radius:14px;background:color-mix(in srgb,var(--ground) 84%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.brand .ghost{width:28px;height:28px;display:block}
+.brand .word{height:18px;width:auto;display:block}
+.nav-links{display:flex;gap:4px;align-items:center}
+.nav-links a{font-family:var(--font-mono);font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;text-decoration:none;padding:8px 12px;border-radius:9px}
+.nav-links a:hover{background:var(--paper)}
+.nav-links a.cta{background:var(--ink);color:var(--paper)}
+.nav-links a.cta:hover{background:var(--ink-3)}
+@media (max-width:600px){.nav-links a:not(.cta){display:none}}
+.word rect{transition:transform .8s cubic-bezier(.2,.8,.2,1),opacity .5s ease}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:28px;align-items:center;padding-block:44px 32px}
+.hero-copy{display:flex;flex-direction:column;gap:22px;min-width:0}
+h1{font-size:clamp(2.6rem,5.8vw,4.5rem);line-height:1.02;letter-spacing:-.035em;margin:0;font-weight:700;text-wrap:balance}
+.kicker{font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.05em;font-size:clamp(.82rem,1.3vw,.95rem);line-height:1.65;margin:0;max-width:36ch}
+.machine-wrap{min-width:0}
+.machine{display:block;width:100%;height:auto;max-width:100%}
+@media (max-width:920px){.hero{grid-template-columns:minmax(0,1fr)}.machine-wrap{max-width:560px;width:100%;margin-inline:auto}}
+
+/* scrubber instrument */
+.scrubber{background:var(--ink);color:var(--paper);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;max-width:540px;outline:2px dashed transparent;outline-offset:4px;transition:outline-color .2s;box-shadow:0 22px 40px -28px rgba(29,31,34,.9)}
+.scrubber.is-drag{outline-color:var(--accent)}
+.sc-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase}
+.live{display:flex;align-items:center;gap:8px;color:var(--mute-ink)}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(255,90,36,.6)}80%,100%{box-shadow:0 0 0 7px rgba(255,90,36,0)}}
+.chip{padding:3px 9px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.chip.leak{color:var(--accent)}
+.chip.clean{color:var(--ink);background:var(--paper);border-color:var(--paper)}
+.chip.busy{color:var(--mute-ink)}
+.sc-stage{position:relative;height:214px;border-radius:8px;background:var(--ink-2);cursor:pointer;overflow:hidden}
+.sc-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.sc-hint{position:absolute;right:10px;bottom:8px;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute-ink);pointer-events:none}
+.sc-fields{list-style:none;margin:0;padding:0;display:grid;gap:3px;max-height:178px;overflow:auto;font-family:var(--font-mono);font-size:.74rem;line-height:1.4}
+.sc-fields li{display:grid;grid-template-columns:6.6em minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:5px 8px;border-radius:6px;background:var(--ink-2)}
+.sc-fields .k{color:var(--mute-ink);text-transform:uppercase;letter-spacing:.06em;font-size:.66rem}
+.sc-fields .v{overflow-wrap:anywhere;min-width:0}
+.sc-fields .g{color:var(--accent);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase}
+.sc-fields li.gone .v{text-decoration:line-through;text-decoration-color:var(--accent);color:var(--mute-ink)}
+.sc-fields li.gone .g{color:var(--mute-ink)}
+.sc-fields li.empty{grid-template-columns:1fr;color:var(--mute-ink)}
+.sc-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.sc-meta{margin:0;font-family:var(--font-mono);font-size:.7rem;line-height:1.5;color:var(--mute-ink);min-width:0;flex:1 1 210px;overflow-wrap:anywhere}
+.sc-meta b{color:var(--paper);font-weight:500}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:600 .84rem var(--font-display);border-radius:999px;padding:9px 16px;border:1.5px solid var(--paper);background:transparent;color:var(--paper);cursor:pointer;white-space:nowrap;transition:transform .15s,background .15s}
+.btn:hover:not(:disabled){transform:translateY(-1px)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.assure{display:flex;align-items:center;gap:10px;flex-wrap:wrap;align-self:flex-start;max-width:100%;border:1.5px solid var(--ink);border-radius:10px;padding:7px 12px 7px 9px;font-size:.84rem}
+.assure .pg{width:20px;height:20px;display:block}
+.assure span{font-family:var(--font-mono);font-size:.72rem;color:var(--mute)}
+
+/* sections */
+section{padding-block:56px}
+.eyebrow{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 12px}
+h2{font-size:clamp(1.9rem,4.2vw,3.1rem);line-height:1.04;letter-spacing:-.03em;margin:0;text-wrap:balance}
+.sec-head{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px;align-items:end;margin-bottom:28px}
+.sec-head p{margin:0;max-width:52ch;color:var(--mute)}
+@media (max-width:760px){.sec-head{grid-template-columns:minmax(0,1fr)}}
+
+.leak-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px}
+.leak-card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);overflow:hidden;display:flex;flex-direction:column;min-width:0}
+.leak-card .art{border-bottom:1.5px solid var(--ink);background:var(--ground)}
+.leak-card .art svg{display:block;width:100%;height:auto}
+.leak-card .body{padding:14px 16px 18px;display:flex;flex-direction:column;gap:8px}
+.leak-card h3{margin:0;font-size:1.06rem;letter-spacing:-.01em}
+.leak-card code{font-family:var(--font-mono);font-size:.72rem;background:var(--ink);color:var(--paper);padding:3px 7px;border-radius:5px;align-self:flex-start;max-width:100%;overflow-wrap:anywhere}
+.leak-card p{margin:0;color:var(--mute);font-size:.9rem;line-height:1.5}
+
+.band{background:var(--ink);color:var(--paper);border-radius:22px;padding:clamp(28px,5vw,60px);margin-block:24px}
+.band h2{color:var(--paper)}
+.band .shout{font-size:clamp(1.4rem,3.2vw,2.3rem);font-weight:700;letter-spacing:-.02em;color:var(--accent);margin:10px 0 34px;line-height:1.15}
+.band .shout span{font-family:var(--font-mono);font-weight:700;margin-right:.35em}
+.feat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.feat{background:var(--ground);color:var(--ink);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.feat svg{width:30px;height:30px;display:block}
+.feat h3{margin:0;font-size:1rem}
+.feat p{margin:0;font-size:.88rem;color:var(--mute);line-height:1.5}
+
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px;margin-bottom:26px}
+.step{border:1.5px solid var(--ink);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:8px;background:var(--paper);min-width:0}
+.step .n{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.12em;color:var(--mute)}
+.step h3{margin:0;font-size:1.06rem}
+.step p{margin:0;color:var(--mute);font-size:.9rem}
+.strip-box{border:1.5px solid var(--ink);border-radius:var(--r);background:var(--paper);padding:16px}
+.strip-cap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:.72rem;color:var(--mute);margin-bottom:12px}
+.strip-cap b{color:var(--ink);font-weight:500;overflow-wrap:anywhere}
+.strip-scroll{overflow-x:auto}
+.strip-rows{min-width:560px;display:grid;gap:8px}
+.strip-row{display:grid;grid-template-columns:4.2em minmax(0,1fr) 5.8em;gap:10px;align-items:center;font-family:var(--font-mono);font-size:.68rem}
+.strip-row .lab{text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}
+.strip-row .tot{text-align:right;font-variant-numeric:tabular-nums}
+.strip{display:flex;height:34px;gap:2px}
+.seg{flex:0 0 auto;border-radius:4px;border:1.5px solid var(--ink);background:var(--paper);display:flex;align-items:center;padding-inline:5px;overflow:hidden;white-space:nowrap;font-size:.6rem;min-width:0}
+.seg.leak{background:var(--accent);border-color:var(--ink)}
+.seg.data{background:var(--ink);color:var(--paper)}
+.strip-key{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-family:var(--font-mono);font-size:.66rem;color:var(--mute)}
+.strip-key i{display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid var(--ink);vertical-align:-1px;margin-right:6px}
+
+footer{border-top:1.5px solid var(--ink);margin-top:24px;padding-top:36px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:end}
+footer .big{font-size:clamp(1.5rem,3.4vw,2.4rem);font-weight:700;letter-spacing:-.025em;line-height:1.12;margin:0;text-wrap:balance}
+footer .small{margin:0;font-size:.82rem;color:var(--mute)}
+footer .word{height:16px;width:auto;margin-top:14px;display:block}
+@media (max-width:760px){footer{grid-template-columns:minmax(0,1fr)}}
+
+@media (prefers-reduced-motion:reduce){.live i{animation:none}.word rect{transition:none}.btn{transition:none}}
+</style>
+
+<div class="wrap">
+  <header class="nav">
+    <a class="brand" href="#top" aria-label="Ghostprint home"><span data-pixel="ghost" class="ghost"></span><span data-pixel="word" class="word"></span></a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#leaks">What leaks</a>
+      <a href="#how">How it works</a>
+      <a class="cta" href="#scrub">Scrub a photo</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="top">
+      <div class="hero-copy">
+        <h1>Zero Trace.<br>Every Photo.</h1>
+        <p class="kicker">Metadata scrubber for every photo you post, send or sell</p>
+
+        <div class="scrubber" id="scrub">
+          <div class="sc-head">
+            <span class="live"><i></i>Local scrubber</span>
+            <span class="chip leak" id="sc-chip">Example · 7 fields</span>
+          </div>
+          <div class="sc-stage" id="sc-stage" tabindex="0" role="button" aria-label="Choose a photo to scrub, or drop one here">
+            <canvas id="sc-canvas" aria-hidden="true"></canvas>
+            <span class="sc-hint">Drop a photo here</span>
+          </div>
+          <ul class="sc-fields" id="sc-fields" aria-label="Metadata found in the photo"></ul>
+          <div class="sc-foot">
+            <p class="sc-meta" id="sc-meta" aria-live="polite"></p>
+            <div class="btns">
+              <button class="btn" id="sc-pick" type="button">Use my photo</button>
+              <button class="btn primary" id="sc-go" type="button">Scrub example</button>
+            </div>
+          </div>
+          <input type="file" id="sc-file" accept="image/jpeg,image/png,image/webp" hidden>
+        </div>
+
+        <div class="assure"><span data-pixel="ghost" class="pg"></span><b>0 bytes uploaded</b><span>Your photo never leaves this tab</span></div>
+      </div>
+      <div class="machine-wrap">
+        <svg id="machine" class="machine" viewBox="0 0 600 540" role="img" aria-label="Isometric scrubbing machine: a photo floats in a glass chamber while a scan plane lifts metadata tags out through the top"></svg>
+      </div>
+    </section>
+
+    <section id="leaks">
+      <div class="sec-head">
+        <div>
+          <p class="eyebrow">What a photo carries</p>
+          <h2>One photo.<br>Four ways to find you.</h2>
+        </div>
+        <p>Phones and cameras write a hidden record into every file. Social apps often strip it, but email attachments, cloud links, forums and marketplace listings usually pass it along untouched.</p>
+      </div>
+      <div class="leak-grid">
+        <article class="leak-card">
+          <div class="art" data-icon="gps"></div>
+          <div class="body"><h3>Where you stood</h3><code>GPSLatitude 40.71280° N</code><p>Phones record coordinates to within a few meters. A photo taken on your porch carries your address.</p></div>
+        </article>
+        <article class="leak-card">
+          <div class="art" data-icon="camera"></div>
+          <div class="body"><h3>What you carry</h3><code>Model iPhone 15 Pro</code><p>Make, model and lens narrow down who took a photo, and they repeat on every shot from the same phone.</p></div>
+        </article>
+        <article class="leak-card">
+          <div class="art" data-icon="clock"></div>
+          <div class="body"><h3>When you were there</h3><code>DateTimeOriginal 18:22:07 −04:00</code><p>A timestamp with a time-zone offset places you in a region and an hour, even with location turned off.</p></div>
+        </article>
+        <article class="leak-card">
+          <div class="art" data-icon="serial"></div>
+          <div class="body"><h3>Which device, exactly</h3><code>BodySerialNumber 052021003418</code><p>Serial numbers and unique image IDs link photos posted from different accounts back to one camera.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="band" aria-labelledby="band-h">
+      <h2 id="band-h">Your camera roll<br>keeps a diary.</h2>
+      <p class="shout"><span>&gt;&gt;&gt;</span>Ghostprint tears out the pages.</p>
+      <div class="feat-grid">
+        <div class="feat"><span data-pixel="lock"></span><h3>Nothing uploads</h3><p>Your photo is read and rewritten inside this tab. Close it and nothing is left anywhere.</p></div>
+        <div class="feat"><span data-pixel="file"></span><h3>Lossless when it can be</h3><p>For JPEG, PNG and WebP, only the metadata blocks are cut. The image data is copied byte for byte.</p></div>
+        <div class="feat"><span data-pixel="rotate"></span><h3>Rotation stays right</h3><p>If a photo depends on its orientation tag, Ghostprint bakes the rotation into the pixels first.</p></div>
+        <div class="feat"><span data-pixel="palette"></span><h3>Colors stay true</h3><p>Color profiles are kept so skin tones and skies don't shift. They describe the screen, not you.</p></div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="sec-head">
+        <div>
+          <p class="eyebrow">How it works</p>
+          <h2>Three steps, all in this tab.</h2>
+        </div>
+        <p>A photo file is a stack of labeled blocks. Ghostprint reads each block's label, decodes the ones that describe you, and writes a new file without them.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><span class="n">STEP 1</span><h3>Drop a photo</h3><p>JPEG, PNG or WebP. The file is read into this tab's memory and sent nowhere.</p></div>
+        <div class="step"><span class="n">STEP 2</span><h3>See what it carries</h3><p>GPS, device, timestamps, serials, editing software and XMP packets, decoded into plain language.</p></div>
+        <div class="step"><span class="n">STEP 3</span><h3>Save the clean copy</h3><p>The metadata blocks are cut out and the clean file is checked again before you save it.</p></div>
+      </div>
+      <div class="strip-box">
+        <div class="strip-cap"><span>Inside <b id="strip-name">IMG_4127.jpg (example)</b></span><span id="strip-delta"></span></div>
+        <div class="strip-scroll">
+          <div class="strip-rows">
+            <div class="strip-row"><span class="lab">Before</span><div class="strip" id="strip-before"></div><span class="tot" id="tot-before"></span></div>
+            <div class="strip-row"><span class="lab">After</span><div class="strip" id="strip-after"></div><span class="tot" id="tot-after"></span></div>
+          </div>
+        </div>
+        <div class="strip-key"><span><i style="background:var(--accent)"></i>Metadata, removed</span><span><i style="background:var(--paper)"></i>Structure, kept</span><span><i style="background:var(--ink)"></i>Image data, untouched</span><span>Block widths are log-scaled</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>
+      <p class="big">A photo should only show what you pointed the camera at.</p>
+      <span data-pixel="word" class="word"></span>
+    </div>
+    <p class="small">Ghostprint is a prototype. Metadata is read and removed entirely in your browser, and no file leaves this page. HEIC and RAW files aren't supported yet.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+"use strict";
+const NS = "http://www.w3.org/2000/svg";
+const css = getComputedStyle(document.documentElement);
+const T = n => css.getPropertyValue(n).trim();
+const INK = T("--ink"), PAPER = T("--paper"), ACCENT = T("--accent"), GROUND = T("--ground"),
+      FACE_L = T("--face-l"), FACE_R = T("--face-r"), MUTE_INK = T("--mute-ink"), INK3 = T("--ink-3");
+const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+/* ---------- pixel art: logo, wordmark, feature glyphs ---------- */
+const FONT = {
+  G:[".###.","#...#","#....","#.###","#...#","#...#",".###."],
+  H:["#...#","#...#","#...#","#####","#...#","#...#","#...#"],
+  O:[".###.","#...#","#...#","#...#","#...#","#...#",".###."],
+  S:[".####","#....","#....",".###.","....#","....#","####."],
+  T:["#####","..#..","..#..","..#..","..#..","..#..","..#.."],
+  P:["####.","#...#","#...#","####.","#....","#....","#...."],
+  R:["####.","#...#","#...#","####.","#.#..","#..#.","#...#"],
+  I:["###",".#.",".#.",".#.",".#.",".#.","###"],
+  N:["#...#","##..#","#.#.#","#..##","#...#","#...#","#...#"]
+};
+const GLYPHS = {
+  ghost:["...####...",".########.","##########","##..##..##","##..##..##","##########","##########","###....###","##########","##########","##.##.##.#","#..#..#..#"],
+  lock:["..####..",".#....#.",".#....#.","########","###..###","###..###","########","########"],
+  file:["#####...","#...##..","#...###.","#.....#.","#.###.#.","#.....#.","#.###.#.","#######."],
+  rotate:["..###..#",".#...#.#","#.....##","#...####","#.......","#......#",".#....#.","..####.."],
+  palette:["..####..",".#....#.","#.#..#.#","#......#","#.#....#","#..##..#",".#....#.","..####.."]
+};
+function pixelSVG(rows, cls) {
+  const cell = 10, gap = 1.4, h = rows.length, w = Math.max(...rows.map(r => r.length));
+  const svg = el("svg", { viewBox: `0 0 ${w*cell} ${h*cell}`, "aria-hidden": "true" });
+  if (cls) svg.setAttribute("class", cls);
+  rows.forEach((r, y) => [...r].forEach((c, x) => {
+    if (c === "#") el("rect", { x: x*cell + gap/2, y: y*cell + gap/2, width: cell - gap, height: cell - gap, fill: "currentColor" }, svg);
+  }));
+  return svg;
+}
+function wordRows(text) {
+  const rows = Array(7).fill("");
+  [...text].forEach((ch, i) => FONT[ch].forEach((r, y) => { rows[y] += (i ? "." : "") + r; }));
+  return rows;
+}
+document.querySelectorAll("[data-pixel]").forEach(host => {
+  const kind = host.dataset.pixel;
+  const svg = pixelSVG(kind === "word" ? wordRows("GHOSTPRINT") : GLYPHS[kind], host.getAttribute("class"));
+  host.replaceWith(svg);
+  // the nav wordmark assembles from scattered pixels on load
+  if (kind === "word" && svg.closest(".nav") && !REDUCE) {
+    const rects = [...svg.querySelectorAll("rect")];
+    rects.forEach(r => { r.style.transform = `translate(${(Math.random()-.5)*160}px,${(Math.random()-.5)*90}px)`; r.style.opacity = "0"; r.style.transitionDelay = (Math.random()*.35).toFixed(2)+"s"; });
+    requestAnimationFrame(() => requestAnimationFrame(() => rects.forEach(r => { r.style.transform = ""; r.style.opacity = ""; })));
+  }
+});
+
+/* ---------- isometric toolkit ---------- */
+function iso(ox, oy, s) {
+  const C = .8660254, P = (x, y, z) => [ox + (x - y)*C*s, oy + (x + y)*.5*s - z*s];
+  const pts = a => a.map(p => P(p[0], p[1], p[2]).map(n => n.toFixed(1)).join(",")).join(" ");
+  const NSS = { "vector-effect": "non-scaling-stroke" };
+  const api = {
+    P, pts,
+    poly(parent, a, attrs) { return el("polygon", Object.assign({ points: pts(a), "stroke-linejoin": "round" }, attrs), parent); },
+    line(parent, a, attrs) { return el("polyline", Object.assign({ points: pts(a), fill: "none", "stroke-linejoin": "round", "stroke-linecap": "round" }, attrs), parent); },
+    box(parent, x, y, z, w, d, h, st = {}) {
+      const g = el("g", { stroke: st.stroke || INK, "stroke-width": st.sw || 1.4 }, parent);
+      api.poly(g, [[x,y+d,z],[x+w,y+d,z],[x+w,y+d,z+h],[x,y+d,z+h]], { fill: st.left || FACE_L });
+      api.poly(g, [[x+w,y,z],[x+w,y+d,z],[x+w,y+d,z+h],[x+w,y,z+h]], { fill: st.right || FACE_R });
+      api.poly(g, [[x,y,z+h],[x+w,y,z+h],[x+w,y+d,z+h],[x,y+d,z+h]], { fill: st.top || PAPER });
+      return g;
+    },
+    cyl(parent, cx, cy, z, r, h, st = {}) {
+      const g = el("g", { stroke: st.stroke || INK, "stroke-width": st.sw || 1.4 }, parent);
+      const [x0, y0] = P(cx, cy, z), [x1, y1] = P(cx, cy, z + h), rx = 1.2247*r*s, ry = .7071*r*s;
+      el("path", { d: `M${x1-rx},${y1} L${x0-rx},${y0} A${rx},${ry} 0 0 0 ${x0+rx},${y0} L${x1+rx},${y1} Z`, fill: st.side || FACE_R }, g);
+      el("ellipse", { cx: x1, cy: y1, rx, ry, fill: st.top || PAPER }, g);
+      return g;
+    },
+    // 2D drawing planes mapped onto iso faces. top: (x,y) at height z. left: face y=Y, local (x,-z). right: face x=X, local (-y,-z)
+    topM: z => `matrix(${C*s},${.5*s},${-C*s},${.5*s},${ox},${oy - z*s})`,
+    leftM: Y => `matrix(${C*s},${.5*s},0,${s},${ox - C*s*Y},${oy + .5*s*Y})`,
+    rightM: X => `matrix(${C*s},${-.5*s},0,${s},${ox + C*s*X},${oy + .5*s*X})`,
+    plane(parent, m) { return el("g", { transform: m }, parent); },
+    NSS
+  };
+  return api;
+}
+const NSS = { "vector-effect": "non-scaling-stroke" };
+
+/* ---------- hero machine ---------- */
+const anim = [];
+(function buildMachine() {
+  const svg = document.getElementById("machine");
+  const I = iso(300, 330, .85), { P, poly, line, box, cyl, plane, topM, leftM, rightM } = I;
+
+  // halftone field
+  const ht = el("g", { fill: INK }, svg);
+  for (let row = 0, y = 34; y < 330; y += 9, row++)
+    for (let x = 20 + (row % 2 ? 4.5 : 0); x < 340; x += 9) {
+      const r = 2.5 - Math.hypot(x - 150, y - 150) / 70;
+      if (r > .35) el("circle", { cx: x.toFixed(1), cy: y, r: r.toFixed(2) }, ht);
+    }
+
+  // floor cables (drawn before props they plug into)
+  const cables = el("g", {}, svg);
+  function cable(pts) {
+    line(cables, pts, { stroke: INK, "stroke-width": 9 });
+    line(cables, pts, { stroke: PAPER, "stroke-width": 4.5 });
+    const flow = line(cables, pts, { stroke: ACCENT, "stroke-width": 2, "stroke-dasharray": "2 16" });
+    anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*28).toFixed(1)));
+  }
+
+  // base: black underside, platform, step
+  box(svg, -130, -130, -9, 260, 260, 9, { top: INK, left: INK, right: INK });
+  box(svg, -130, -130, 0, 260, 260, 18);
+  [[-100, 70], [30, 70]].forEach(([u, w]) => {
+    el("rect", Object.assign({ x: u, y: -13, width: w, height: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), plane(svg, leftM(130)));
+    el("rect", Object.assign({ x: u, y: -13, width: w, height: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), plane(svg, rightM(130)));
+  });
+  const deck = plane(svg, topM(18));
+  el("rect", Object.assign({ x: -120, y: -120, width: 240, height: 240, fill: "none", stroke: INK, "stroke-width": 1, "stroke-dasharray": "3 5" }, NSS), deck);
+  box(svg, -104, -104, 18, 208, 208, 8);
+
+  cable([[130, 95, 7], [205, 95, 7], [205, 170, 7], [260, 170, 7]]);
+  cable([[130, -8, 7], [182, -8, 7]]);
+
+  // shredder bin (right)
+  box(svg, 180, -44, 0, 54, 54, 46);
+  el("rect", { x: 189, y: -26, width: 36, height: 9, fill: INK }, plane(svg, topM(46)));
+  const binFace = plane(svg, leftM(10));
+  el("rect", Object.assign({ x: 188, y: -34, width: 38, height: 13, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), binFace);
+  const binTxt = el("text", { x: 207, y: -24.5, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 8, "font-weight": 700, fill: INK }, binFace);
+  binTxt.textContent = "META→0";
+  const bits = el("g", {}, svg);
+  for (let i = 0; i < 3; i++) {
+    const b = el("rect", { width: 6, height: 6, fill: ACCENT, stroke: INK, "stroke-width": 1 }, bits);
+    anim.push(t => {
+      const p = (t*.7 + i/3) % 1, [x, y] = P(207, -22, 110 - p*64);
+      b.setAttribute("x", (x - 3 + Math.sin(i*2 + t)*3).toFixed(1)); b.setAttribute("y", (y - 3).toFixed(1));
+      b.setAttribute("opacity", p > .92 ? 0 : 1);
+    });
+  }
+
+  // chamber floor, back posts and back glass
+  poly(svg, [[-56,-56,26],[56,-56,26],[56,56,26],[-56,56,26]], { fill: ACCENT, "fill-opacity": .28, stroke: INK, "stroke-width": 1.2 });
+  box(svg, -62, -62, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
+  poly(svg, [[-56,-56,26],[-56,56,26],[-56,56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
+  poly(svg, [[-56,-56,26],[56,-56,26],[56,-56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
+
+  // floating photo card on the y=0 plane
+  const cardPlane = plane(svg, leftM(0));
+  const card = el("g", {}, cardPlane);
+  el("rect", Object.assign({ x: -40, y: -164, width: 80, height: 98, rx: 3, fill: PAPER, stroke: INK, "stroke-width": 1.5 }, NSS), card);
+  el("rect", { x: -34, y: -158, width: 68, height: 58, fill: INK }, card);
+  el("circle", { cx: 14, cy: -141, r: 8, fill: ACCENT }, card);
+  el("polygon", { points: "-34,-100 -16,-126 -5,-113 9,-133 34,-104 34,-100", fill: GROUND }, card);
+  el("polygon", { points: "-34,-100 -22,-110 -8,-100", fill: MUTE_INK }, card);
+  for (let y = -155; y < -100; y += 4) for (let x = -31; x < 34; x += 4) el("circle", { cx: x, cy: y, r: .7, fill: PAPER, "fill-opacity": .22 }, card);
+  el("rect", { x: -34, y: -93, width: 40, height: 4, fill: INK }, card);
+  el("rect", { x: -34, y: -85, width: 26, height: 4, fill: MUTE_INK }, card);
+  const badge = el("g", {}, card);
+  el("rect", Object.assign({ x: 12, y: -95, width: 22, height: 11, rx: 2, fill: ACCENT, stroke: INK, "stroke-width": 1 }, NSS), badge);
+  const bt = el("text", { x: 23, y: -86.8, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 7, "font-weight": 700, fill: INK }, badge);
+  bt.textContent = "EXIF";
+
+  // scan plane
+  const scan = el("polygon", { fill: ACCENT, "fill-opacity": .2, stroke: ACCENT, "stroke-width": 1.6 }, svg);
+  let scanZ = 30;
+  anim.push(t => {
+    scanZ = 32 + (Math.sin(t*.9 - 1.5)*.5 + .5)*158;
+    scan.setAttribute("points", I.pts([[-55,-55,scanZ],[55,-55,scanZ],[55,55,scanZ],[-55,55,scanZ]]));
+    card.setAttribute("transform", `translate(0,${(Math.sin(t*1.3)*3).toFixed(2)})`);
+    // badge sits around z≈80; it switches off once the scan plane has passed it
+    badge.setAttribute("opacity", scanZ > 84 ? .12 : 1);
+  });
+
+  // front glass, glare, front posts
+  poly(svg, [[-56,56,26],[56,56,26],[56,56,196],[-56,56,196]], { fill: PAPER, "fill-opacity": .16, stroke: INK, "stroke-width": 1.2 });
+  poly(svg, [[56,-56,26],[56,56,26],[56,56,196],[56,-56,196]], { fill: PAPER, "fill-opacity": .2, stroke: INK, "stroke-width": 1.2 });
+  const glare = plane(svg, leftM(56));
+  el("line", Object.assign({ x1: -44, y1: -60, x2: -14, y2: -160, stroke: "#fff", "stroke-width": 3, "stroke-opacity": .7, "stroke-linecap": "round" }, NSS), glare);
+  el("line", Object.assign({ x1: -30, y1: -52, x2: -20, y2: -86, stroke: "#fff", "stroke-width": 2, "stroke-opacity": .6, "stroke-linecap": "round" }, NSS), glare);
+  box(svg, 56, -62, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
+  box(svg, -62, 56, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
+  box(svg, 56, 56, 26, 6, 6, 170, { top: INK, left: INK3, right: INK });
+
+  // cap with vents, status lights and exhaust port
+  box(svg, -68, -68, 196, 136, 136, 24);
+  const vents = plane(svg, leftM(68));
+  for (let x = -54; x <= 54; x += 9) el("line", Object.assign({ x1: x, y1: -217, x2: x, y2: -203, stroke: INK, "stroke-width": 1.4 }, NSS), vents);
+  const lights = plane(svg, rightM(68)), leds = [];
+  for (let i = 0; i < 6; i++) leds.push(el("rect", Object.assign({ x: -48 + i*12, y: -214, width: 8, height: 7, fill: INK, stroke: INK, "stroke-width": 1 }, NSS), lights));
+  anim.push(t => { const k = Math.floor(t*5) % 6; leds.forEach((r, i) => r.setAttribute("fill", i === k || i === (k+1)%6 ? ACCENT : INK)); });
+  cyl(svg, 0, 0, 220, 26, 7, { top: INK });
+  el("circle", Object.assign({ cx: 0, cy: 0, r: 16, fill: "none", stroke: ACCENT, "stroke-width": 2 }, NSS), plane(svg, topM(227)));
+
+  // intake tray (front-left) with its cable
+  box(svg, -66, 168, 0, 72, 56, 16);
+  const tray = plane(svg, topM(16));
+  el("rect", Object.assign({ x: -56, y: 176, width: 52, height: 40, fill: PAPER, stroke: INK, "stroke-width": 1.2 }, NSS), tray);
+  el("polyline", Object.assign({ points: "-52,210 -40,194 -32,203 -22,188 -8,210", fill: "none", stroke: INK, "stroke-width": 1.2 }, NSS), tray);
+  cable([[6, 196, 7], [64, 196, 7], [64, 132, 7]]);
+
+  // metadata tags rising out of the port
+  const chipTexts = ["GPS 40.7128 N", "iPhone 15 Pro", "18:22:07 −04:00", "SN 052021003418"];
+  const chips = el("g", { "font-family": "JetBrains Mono, monospace", "font-size": 10 }, svg);
+  chipTexts.forEach((txt, i) => {
+    const g = el("g", {}, chips), w = txt.length*6.1 + 14;
+    el("rect", { x: -w/2, y: -10, width: w, height: 20, rx: 5, fill: INK, stroke: ACCENT, "stroke-width": 1.4 }, g);
+    const tx = el("text", { x: 0, y: 3.5, "text-anchor": "middle", fill: PAPER }, g);
+    tx.textContent = txt;
+    const side = i % 2 ? 1 : -1;
+    anim.push(t => {
+      const p = ((t + i*1.5) / 6) % 1, [x, y] = P(0, 0, 236 + p*110);
+      const a = p < .1 ? p/.1 : Math.max(0, 1 - (p - .1)/.6);
+      g.setAttribute("transform", `translate(${(x + side*(58 + p*40)).toFixed(1)},${y.toFixed(1)})`);
+      g.setAttribute("opacity", a.toFixed(2));
+    });
+  });
+})();
+
+/* ---------- small iso icons for the leak cards ---------- */
+const ICONS = {
+  gps(svg, I) {
+    const { P, box, cyl, plane, topM } = I;
+    box(svg, -70, -70, 0, 140, 140, 10);
+    const map = plane(svg, topM(10));
+    [[-70,-28,70,-28],[-70,22,70,22],[-30,-70,-30,70],[34,-70,34,70]].forEach(([x1,y1,x2,y2]) => el("line", Object.assign({ x1, y1, x2, y2, stroke: INK, "stroke-width": 1.2 }, NSS), map));
+    el("path", Object.assign({ d: "M-70,48 C-30,30 0,70 70,40", fill: "none", stroke: MUTE_INK, "stroke-width": 3 }, NSS), map);
+    el("circle", Object.assign({ cx: 4, cy: -4, r: 16, fill: ACCENT, "fill-opacity": .35, stroke: ACCENT, "stroke-width": 1.5 }, NSS), map);
+    cyl(svg, 4, -4, 10, 2.2, 42, { top: INK, side: INK });
+    const [hx, hy] = P(4, -4, 60);
+    el("circle", { cx: hx, cy: hy, r: 12, fill: ACCENT, stroke: INK, "stroke-width": 1.4 }, svg);
+    el("circle", { cx: hx, cy: hy, r: 4, fill: INK }, svg);
+  },
+  camera(svg, I) {
+    const { box, cyl, plane, leftM } = I;
+    box(svg, -52, -32, 0, 104, 64, 56);
+    box(svg, -30, -20, 56, 42, 30, 10);
+    cyl(svg, 32, -14, 56, 7, 5);
+    const f = plane(svg, leftM(32));
+    el("circle", Object.assign({ cx: -6, cy: -28, r: 21, fill: INK, stroke: INK, "stroke-width": 1.4 }, NSS), f);
+    el("circle", { cx: -6, cy: -28, r: 13, fill: INK3 }, f);
+    el("circle", { cx: -10, cy: -32, r: 4, fill: ACCENT }, f);
+    el("rect", Object.assign({ x: 26, y: -48, width: 16, height: 9, fill: PAPER, stroke: INK, "stroke-width": 1.2 }, NSS), f);
+  },
+  clock(svg, I) {
+    const { cyl, plane, topM } = I;
+    cyl(svg, 0, 0, 0, 64, 14);
+    const face = plane(svg, topM(14));
+    for (let i = 0; i < 12; i++) {
+      const a = i*Math.PI/6, r1 = i % 3 ? 52 : 46;
+      el("line", Object.assign({ x1: Math.cos(a)*r1, y1: Math.sin(a)*r1, x2: Math.cos(a)*58, y2: Math.sin(a)*58, stroke: INK, "stroke-width": i % 3 ? 1 : 2 }, NSS), face);
+    }
+    el("line", Object.assign({ x1: 0, y1: 0, x2: -30, y2: -16, stroke: INK, "stroke-width": 3, "stroke-linecap": "round" }, NSS), face);
+    el("line", Object.assign({ x1: 0, y1: 0, x2: 34, y2: -30, stroke: ACCENT, "stroke-width": 3, "stroke-linecap": "round" }, NSS), face);
+    el("circle", { cx: 0, cy: 0, r: 4, fill: INK }, face);
+  },
+  serial(svg, I) {
+    const { box, plane, topM } = I;
+    box(svg, -50, -50, 0, 116, 72, 6, { top: GROUND });
+    box(svg, -62, -26, 12, 116, 72, 6);
+    const tag = plane(svg, topM(18));
+    let x = -52;
+    [2,1,3,1,1,2,4,1,2,1,3,2,1,1,3,1,2,2,1,3].forEach((w, i) => { if (i % 2 === 0) el("rect", { x, y: -16, width: w*2.2, height: 40, fill: INK }, tag); x += w*2.2 + 1; });
+    el("circle", Object.assign({ cx: 40, cy: 10, r: 8, fill: ACCENT, stroke: INK, "stroke-width": 1.4 }, NSS), tag);
+  }
+};
+document.querySelectorAll("[data-icon]").forEach(host => {
+  const svg = el("svg", { viewBox: "0 0 240 150", "aria-hidden": "true" });
+  ICONS[host.dataset.icon](svg, iso(120, 92, .62));
+  host.appendChild(svg);
+});
+
+/* ---------- metadata reading ---------- */
+const ascii = (u8, at, n) => { let s = ""; for (let i = 0; i < n && at + i < u8.length; i++) s += String.fromCharCode(u8[at + i]); return s; };
+const fmtBytes = b => b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(2)} MB`;
+
+function addField(out, g, k, v) {
+  if (v === undefined || v === null || v === "") return;
+  if (out.fields.some(f => f.k === k)) return;
+  out.fields.push({ g, k, v: String(v).slice(0, 160) });
+}
+
+function readTIFF(dv, t, out) {
+  if (t + 8 > dv.byteLength) return;
+  const le = dv.getUint16(t) === 0x4949;
+  const g16 = o => dv.getUint16(t + o, le), g32 = o => dv.getUint32(t + o, le);
+  if (g16(2) !== 42) return;
+  const SZ = { 1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 9:4, 10:8 };
+  function val(type, count, vo) {
+    const size = (SZ[type] || 1) * count;
+    const at = size > 4 ? g32(vo) : vo;
+    if (t + at + size > dv.byteLength) return null;
+    switch (type) {
+      case 2: { let s = ""; for (let i = 0; i < count; i++) { const c = dv.getUint8(t + at + i); if (!c) break; s += String.fromCharCode(c); } return s.trim(); }
+      case 3: return count === 1 ? g16(at) : Array.from({ length: count }, (_, i) => g16(at + i*2));
+      case 4: return count === 1 ? g32(at) : Array.from({ length: count }, (_, i) => g32(at + i*4));
+      case 5: case 10: {
+        const a = [];
+        for (let i = 0; i < count; i++) {
+          const n = type === 5 ? g32(at + i*8) : dv.getInt32(t + at + i*8, le);
+          const d = type === 5 ? g32(at + i*8 + 4) : dv.getInt32(t + at + i*8 + 4, le);
+          a.push(d ? n/d : 0);
+        }
+        return count === 1 ? a[0] : a;
+      }
+      case 7: return { bytes: count };
+      default: return null;
+    }
+  }
+  function ifd(off) {
+    const m = {};
+    if (!off || t + off + 2 > dv.byteLength) return m;
+    const n = g16(off);
+    for (let i = 0; i < n && i < 512; i++) {
+      const e = off + 2 + i*12;
+      if (t + e + 12 > dv.byteLength) break;
+      try { m[g16(e)] = val(g16(e + 2), g32(e + 4), e + 8); } catch (_) {}
+    }
+    return m;
+  }
+  const t0 = ifd(g32(4)), ex = ifd(t0[0x8769]), gps = ifd(t0[0x8825]);
+  if (t0[0x0112]) out.orientation = t0[0x0112];
+
+  if (gps[2] && gps[4]) {
+    const dec = v => Array.isArray(v) ? v[0] + (v[1] || 0)/60 + (v[2] || 0)/3600 : v;
+    addField(out, "Location", "GPS", `${dec(gps[2]).toFixed(5)}° ${gps[1] || "N"}, ${dec(gps[4]).toFixed(5)}° ${gps[3] || "E"}`);
+  }
+  if (typeof gps[6] === "number") addField(out, "Location", "Altitude", `${gps[6].toFixed(1)} m ${gps[5] === 1 ? "below" : "above"} sea level`);
+  if (typeof gps[0x11] === "number") addField(out, "Location", "Facing", `${Math.round(gps[0x11])}°`);
+  const taken = ex[0x9003] || t0[0x0132];
+  if (taken) addField(out, "Time", "Taken", taken + (ex[0x9011] ? " " + ex[0x9011] : ""));
+  const make = t0[0x010F], model = t0[0x0110];
+  if (make || model) addField(out, "Device", "Camera", model && make && !model.startsWith(make) ? `${make} ${model}` : (model || make));
+  addField(out, "Device", "Lens", ex[0xA434]);
+  addField(out, "Identity", "Serial", ex[0xA431]);
+  addField(out, "Identity", "Lens serial", ex[0xA435]);
+  addField(out, "Identity", "Owner", ex[0xA430]);
+  addField(out, "Identity", "Image ID", ex[0xA420]);
+  addField(out, "Author", "Artist", t0[0x013B]);
+  addField(out, "Author", "Copyright", t0[0x8298]);
+  addField(out, "Software", "Software", t0[0x0131]);
+  addField(out, "Other", "Caption", t0[0x010E]);
+  if (ex[0x927C] && ex[0x927C].bytes) addField(out, "Hidden", "Maker notes", `${fmtBytes(ex[0x927C].bytes)} of vendor data`);
+}
+
+function readXMP(text, out, bytes) {
+  const props = (text.match(/\s[A-Za-z]+:[A-Za-z]+="/g) || []).length + (text.match(/<[A-Za-z]+:[A-Za-z]+>[^<]/g) || []).length;
+  const get = name => { const m = text.match(new RegExp(`${name}="([^"]*)"|<${name}>([^<]*)<`)); return m ? (m[1] || m[2] || "").trim() : ""; };
+  addField(out, "Hidden", "XMP packet", `${fmtBytes(bytes)} · ${props} properties`);
+  const city = get("photoshop:City"), country = get("photoshop:Country");
+  if (city || country) addField(out, "Location", "Place", [city, country].filter(Boolean).join(", "));
+  const creator = (text.match(/<dc:creator>[\s\S]*?<rdf:li[^>]*>([^<]+)</) || [])[1];
+  addField(out, "Author", "Creator", creator && creator.trim());
+  addField(out, "Software", "Edited with", get("xmp:CreatorTool"));
+}
+
+const SOF = new Set([0xC0,0xC1,0xC2,0xC3,0xC5,0xC6,0xC7,0xC9,0xCA,0xCB,0xCD,0xCE,0xCF]);
+function parseJPEG(dv, u8, out) {
+  out.segments.push({ name: "SOI", bytes: 2, keep: true });
+  let p = 2;
+  while (p + 4 <= u8.length) {
+    if (u8[p] !== 0xFF) return;
+    const m = u8[p + 1];
+    if (m === 0xFF) { p++; continue; }
+    if ((m >= 0xD0 && m <= 0xD7) || m === 0x01) { p += 2; continue; }
+    if (m === 0xD9) return;
+    if (m === 0xDA) { out.sosAt = p; out.segments.push({ name: "SOS image data", bytes: u8.length - p, keep: true, data: true }); return; }
+    const len = dv.getUint16(p + 2), s = p + 4, end = p + 2 + len;
+    if (len < 2 || end > u8.length) return;
+    let name = "FF" + m.toString(16).toUpperCase(), keep = true;
+    if (m === 0xE0) name = ascii(u8, s, 4) === "JFIF" ? "APP0 JFIF" : "APP0";
+    else if (m === 0xE1) {
+      keep = false;
+      if (ascii(u8, s, 4) === "Exif") { name = "APP1 Exif"; readTIFF(dv, s + 6, out); }
+      else if (ascii(u8, s, 28) === "http://ns.adobe.com/xap/1.0/") { name = "APP1 XMP"; readXMP(new TextDecoder().decode(u8.subarray(s + 29, end)), out, len + 2); }
+      else name = "APP1";
+    }
+    else if (m === 0xE2) { const icc = ascii(u8, s, 11) === "ICC_PROFILE"; name = icc ? "APP2 ICC" : "APP2"; keep = icc; }
+    else if (m === 0xED) { name = "APP13 IPTC"; keep = false; addField(out, "Hidden", "IPTC block", `${fmtBytes(len + 2)} of captions, keywords or credits`); }
+    else if (m === 0xEE) name = "APP14 Adobe";
+    else if (m >= 0xE3 && m <= 0xEF) { name = "APP" + (m - 0xE0); keep = false; }
+    else if (m === 0xFE) { name = "COM"; keep = false; addField(out, "Other", "Comment", new TextDecoder().decode(u8.subarray(s, Math.min(end, s + 120))).replace(/\0/g, "").trim()); }
+    else if (m === 0xDB) name = "DQT";
+    else if (m === 0xC4) name = "DHT";
+    else if (m === 0xDD) name = "DRI";
+    else if (SOF.has(m)) name = "SOF";
+    out.segments.push({ name, bytes: len + 2, keep, start: p, end });
+    if (!keep) out.metaBytes += len + 2;
+    p = end;
+  }
+}
+
+const PNG_DROP = new Set(["tEXt", "iTXt", "zTXt", "eXIf", "tIME"]);
+function parsePNG(dv, u8, out) {
+  out.segments.push({ name: "Signature", bytes: 8, keep: true, start: 0, end: 8 });
+  let p = 8;
+  while (p + 12 <= u8.length) {
+    const len = dv.getUint32(p), type = ascii(u8, p + 4, 4), ds = p + 8, end = p + 12 + len;
+    if (end > u8.length) break;
+    const drop = PNG_DROP.has(type);
+    if (type === "tEXt" || type === "iTXt" || type === "zTXt") {
+      const z = u8.indexOf(0, ds), kw = ascii(u8, ds, Math.max(0, Math.min(z, ds + 79) - ds));
+      let txt = "";
+      if (type === "tEXt") txt = ascii(u8, z + 1, Math.min(end - 4, z + 1 + 4000) - (z + 1));
+      else if (type === "iTXt" && u8[z + 1] === 0) { let q = z + 3; q = u8.indexOf(0, q) + 1; q = u8.indexOf(0, q) + 1; txt = new TextDecoder().decode(u8.subarray(q, end - 4)); }
+      if (/xmp/i.test(kw) && txt) readXMP(txt, out, len + 12);
+      else {
+        const k = kw || "Text";
+        const g = /author|artist|copyright/i.test(k) ? "Author" : /software/i.test(k) ? "Software" : /time|date/i.test(k) ? "Time" : "Other";
+        addField(out, g, k.slice(0, 18), txt ? txt.slice(0, 120) : `compressed text, ${fmtBytes(len)}`);
+      }
+    } else if (type === "eXIf") readTIFF(dv, ds, out);
+    else if (type === "tIME") addField(out, "Time", "Saved", `${dv.getUint16(ds)}-${String(u8[ds+2]).padStart(2,"0")}-${String(u8[ds+3]).padStart(2,"0")} ${String(u8[ds+4]).padStart(2,"0")}:${String(u8[ds+5]).padStart(2,"0")}`);
+    out.segments.push({ name: type === "IDAT" ? "IDAT image data" : type, bytes: len + 12, keep: !drop, data: type === "IDAT", start: p, end });
+    if (drop) out.metaBytes += len + 12;
+    p = end;
+    if (type === "IEND") break;
+  }
+}
+
+function parseWebP(dv, u8, out) {
+  out.segments.push({ name: "RIFF header", bytes: 12, keep: true });
+  let p = 12;
+  while (p + 8 <= u8.length) {
+    const cc = ascii(u8, p, 4), size = dv.getUint32(p + 4, true), ds = p + 8, end = Math.min(u8.length, ds + size + (size & 1));
+    let keep = true;
+    if (cc === "EXIF") { keep = false; readTIFF(dv, ascii(u8, ds, 4) === "Exif" ? ds + 6 : ds, out); }
+    else if (cc === "XMP ") { keep = false; readXMP(new TextDecoder().decode(u8.subarray(ds, ds + size)), out, end - p); }
+    const data = cc === "VP8 " || cc === "VP8L" || cc === "ALPH" || cc === "ANMF";
+    out.segments.push({ name: data ? cc.trim() + " image data" : cc.trim(), bytes: end - p, keep, data, start: p, end });
+    if (!keep) out.metaBytes += end - p;
+    p = end;
+  }
+}
+
+function parseBuffer(buf) {
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  const out = { format: "Unknown", fields: [], segments: [], orientation: 1, metaBytes: 0, sosAt: -1 };
+  if (u8[0] === 0xFF && u8[1] === 0xD8) { out.format = "JPEG"; parseJPEG(dv, u8, out); }
+  else if (ascii(u8, 1, 3) === "PNG") { out.format = "PNG"; parsePNG(dv, u8, out); }
+  else if (ascii(u8, 0, 4) === "RIFF" && ascii(u8, 8, 4) === "WEBP") { out.format = "WebP"; parseWebP(dv, u8, out); }
+  return out;
+}
+
+/* ---------- writing the clean file ---------- */
+function concat(parts) {
+  const n = parts.reduce((a, b) => a + b.length, 0), o = new Uint8Array(n);
+  let p = 0; for (const x of parts) { o.set(x, p); p += x.length; }
+  return o;
+}
+function stripLossless(u8, info) {
+  if (info.format === "JPEG") {
+    if (info.sosAt < 0 || (info.orientation || 1) !== 1) return null;
+    const parts = [u8.subarray(0, 2)];
+    for (const s of info.segments) if (s.keep && s.start !== undefined) parts.push(u8.subarray(s.start, s.end));
+    parts.push(u8.subarray(info.sosAt));
+    return concat(parts);
+  }
+  if (info.format === "PNG") return concat(info.segments.filter(s => s.keep && s.start !== undefined).map(s => u8.subarray(s.start, s.end)));
+  if (info.format === "WebP") {
+    const parts = [];
+    for (const s of info.segments) {
+      if (!s.keep || s.start === undefined) continue;
+      let c = u8.slice(s.start, s.end);
+      if (ascii(c, 0, 4) === "VP8X") c[8] &= ~0x0C; // clear the EXIF and XMP flags
+      parts.push(c);
+    }
+    const body = concat(parts), head = new Uint8Array(12);
+    head.set([82, 73, 70, 70]); new DataView(head.buffer).setUint32(4, body.length + 4, true); head.set([87, 69, 66, 80], 8);
+    return concat([head, body]);
+  }
+  return null;
+}
+async function reencode(file, info) {
+  const bmp = await createImageBitmap(file);
+  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
+  c.getContext("2d").drawImage(bmp, 0, 0);
+  const type = info.format === "PNG" ? "image/png" : info.format === "WebP" ? "image/webp" : "image/jpeg";
+  const blob = await new Promise(r => c.toBlob(r, type, .92));
+  if (!blob) throw new Error("encode");
+  return blob;
+}
+async function buildClean(file, buf, info) {
+  let blob = null, mode = "lossless";
+  const bytes = stripLossless(new Uint8Array(buf), info);
+  if (bytes) {
+    blob = new Blob([bytes], { type: file.type || "application/octet-stream" });
+    try { const b = await createImageBitmap(blob); if (b.close) b.close(); } catch (_) { blob = null; }
+  }
+  if (!blob) { mode = "reencoded"; blob = await reencode(file, info); }
+  const check = parseBuffer(await blob.arrayBuffer());
+  return { blob, mode, removed: file.size - blob.size, leftover: check.fields.length, after: check };
+}
+
+/* ---------- the dot-matrix instrument ---------- */
+const cv = document.getElementById("sc-canvas"), ctx = cv.getContext("2d");
+const off = document.createElement("canvas"), octx = off.getContext("2d", { willReadFrequently: true });
+const S = { W: 0, H: 0, dots: [], swarms: [], region: null, src: null, fields: [], phase: "leaking", scanX: 0, popped: 0, t: 0 };
+const ACC = [255, 90, 36], PAP = [238, 239, 238];
+const heatColor = h => `rgb(${PAP.map((c, i) => Math.round(c + (ACC[i] - c)*h)).join(",")})`;
+
+function makeSample() {
+  const c = document.createElement("canvas"); c.width = 320; c.height = 240;
+  const g = c.getContext("2d");
+  const sky = g.createLinearGradient(0, 0, 0, 190);
+  sky.addColorStop(0, "#202226"); sky.addColorStop(.6, "#8e9399"); sky.addColorStop(1, "#e4e6e8");
+  g.fillStyle = sky; g.fillRect(0, 0, 320, 240);
+  g.fillStyle = "#fff"; g.beginPath(); g.arc(214, 104, 30, 0, 7); g.fill();
+  const ridge = (col, base, amp, seed) => { g.fillStyle = col; g.beginPath(); g.moveTo(0, 240); for (let x = 0; x <= 320; x += 8) g.lineTo(x, base - Math.abs(Math.sin(x*.018 + seed))*amp - Math.sin(x*.05 + seed*2)*amp*.18); g.lineTo(320, 240); g.fill(); };
+  ridge("#5d6167", 160, 70, 1.2); ridge("#33363b", 178, 46, 2.7); ridge("#0e0f11", 196, 26, 4.1);
+  g.fillStyle = "#5c6066"; g.fillRect(0, 196, 320, 44);
+  g.fillStyle = "#d8dadc"; for (let i = 0; i < 6; i++) g.fillRect(190 + Math.sin(i)*8, 202 + i*6, 48 - i*7, 2);
+  return c;
+}
+
+function layout() {
+  if (!S.W || !S.src) return;
+  const W = S.W, H = S.H, src = S.src;
+  const sc = Math.min((W*.5 - 18) / src.width, (H - 24) / src.height);
+  const iw = Math.max(1, Math.round(src.width*sc)), ih = Math.max(1, Math.round(src.height*sc));
+  const x0 = 12, y0 = Math.round((H - ih)/2);
+  off.width = iw; off.height = ih; octx.clearRect(0, 0, iw, ih); octx.drawImage(src, 0, 0, iw, ih);
+  const data = octx.getImageData(0, 0, iw, ih).data, pitch = Math.max(3.4, Math.min(6, iw/44)), tg = [];
+  for (let row = 0, y = pitch/2; y < ih; y += pitch*.866, row++)
+    for (let x = row % 2 ? pitch : pitch/2; x < iw; x += pitch) {
+      const i = ((y | 0)*iw + (x | 0))*4, l = (.2126*data[i] + .7152*data[i+1] + .0722*data[i+2]) / 255 * (data[i+3]/255);
+      if (l > .07) tg.push({ x: x0 + x, y: y0 + y, r: pitch*.5*(.2 + .8*l) });
+    }
+  for (let i = tg.length - 1; i > 0; i--) { const j = (Math.random()*(i + 1)) | 0; [tg[i], tg[j]] = [tg[j], tg[i]]; }
+  S.region = { x0, y0, iw, ih };
+  tg.forEach((t, i) => {
+    let d = S.dots[i];
+    if (!d) { d = { x: Math.random() < .5 ? -6 : W + 6, y: Math.random()*H, vx: 0, vy: 0, r: 0, heat: 0 }; S.dots.push(d); }
+    Object.assign(d, { tx: t.x, ty: t.y, tr: t.r, out: false });
+  });
+  for (let i = tg.length; i < S.dots.length; i++) S.dots[i].out = true, S.dots[i].tr = 0;
+  // leak swarms, one per group, on the right half
+  const groups = [...new Set(S.fields.map(f => f.g))];
+  const ax = W*.5 + 6, aw = W - ax - 8, cols = groups.length > 3 ? 2 : 1, rows = Math.max(1, Math.ceil(groups.length/cols));
+  const cw = aw/cols, ch = (H - 26)/rows, rad = Math.min(cw, ch)*.27;
+  const old = S.swarms;
+  S.swarms = groups.map((g, i) => {
+    const cx = ax + cw*(i % cols + .5), cy = 4 + ch*((i/cols | 0) + .5) - 6, prev = old[i];
+    const parts = prev && !prev.blast ? prev.parts : Array.from({ length: 12 }, () => ({ ph: Math.random()*6.283, rr: .35 + Math.random()*.65, sp: (.5 + Math.random())*(Math.random() < .5 ? -1 : 1), x: cx, y: cy, vx: 0, vy: 0, a: 1 }));
+    return { label: g.toUpperCase(), cx, cy, r: rad, parts, blast: S.phase === "clean", la: 1 };
+  });
+  if (S.phase === "clean") S.swarms = [];
+  if (REDUCE) for (const d of S.dots) { d.x = d.tx; d.y = d.ty; d.r = d.tr; }
+}
+
+function blast(s) {
+  s.blast = true;
+  for (const p of s.parts) { const a = Math.random()*6.283, v = 2 + Math.random()*4; p.vx = Math.cos(a)*v; p.vy = Math.sin(a)*v - 1; }
+}
+
+let running = false, visible = true;
+function frame(now) {
+  running = false;
+  if (!visible || document.hidden) return;
+  const { W, H } = S; S.t = now/1000;
+  ctx.clearRect(0, 0, W, H);
+  // scanning sweep
+  if (S.phase === "scan" && S.region) {
+    // time-based so the sweep finishes on schedule even when frames are throttled
+    S.scanX = REDUCE ? 1e4 : (now - S.scanStart)/1200*(S.region.iw + 24);
+    const sx = S.region.x0 + S.scanX;
+    for (const d of S.dots) if (!d.scanned && d.tx <= sx) { d.scanned = true; d.heat = 1; }
+    const k = Math.min(S.swarms.length, Math.floor(S.scanX/(S.region.iw + 20)*S.swarms.length) + 1);
+    while (S.popped < k) { blast(S.swarms[S.popped]); onGroupGone(S.swarms[S.popped].label); S.popped++; }
+    if (sx <= S.region.x0 + S.region.iw + 4) {
+      const gr = ctx.createLinearGradient(sx - 26, 0, sx, 0);
+      gr.addColorStop(0, "rgba(255,90,36,0)"); gr.addColorStop(1, "rgba(255,90,36,.35)");
+      ctx.fillStyle = gr; ctx.fillRect(sx - 26, S.region.y0 - 6, 26, S.region.ih + 12);
+      ctx.fillStyle = ACCENT; ctx.fillRect(sx - 1, S.region.y0 - 8, 2, S.region.ih + 16);
+    } else if (S.popped >= S.swarms.length) { S.phase = "settling"; scanFinished(); }
+  }
+  // idle leak shimmer
+  if (S.phase === "leaking" && S.swarms.length && S.dots.length && !REDUCE)
+    for (let k = 0; k < 2; k++) { const d = S.dots[(Math.random()*S.dots.length) | 0]; d.heat = Math.max(d.heat, .55); }
+  // image dots: cool ones in one path, hot ones individually
+  ctx.fillStyle = PAPER; ctx.beginPath();
+  const hot = [];
+  let removed = false;
+  for (const d of S.dots) {
+    if (REDUCE) { d.x = d.tx; d.y = d.ty; d.r = d.tr; }
+    else { d.vx = (d.vx + (d.tx - d.x)*.07)*.8; d.vy = (d.vy + (d.ty - d.y)*.07)*.8; d.x += d.vx; d.y += d.vy; d.r += (d.tr - d.r)*.12; }
+    if (d.heat > 0) d.heat = Math.max(0, d.heat - (REDUCE ? 1 : .016));
+    if (d.out && d.r < .1) { removed = true; continue; }
+    if (d.r < .15) continue;
+    if (d.heat > .03) { hot.push(d); continue; }
+    ctx.moveTo(d.x + d.r, d.y); ctx.arc(d.x, d.y, d.r, 0, 6.283);
+  }
+  ctx.fill();
+  for (const d of hot) { ctx.fillStyle = heatColor(d.heat); ctx.beginPath(); ctx.arc(d.x, d.y, d.r*(1 + d.heat*.35), 0, 6.283); ctx.fill(); }
+  if (removed) S.dots = S.dots.filter(d => !(d.out && d.r < .1));
+  // leak swarms: square "bytes" orbiting a label
+  ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
+  for (const s of S.swarms) {
+    for (const p of s.parts) {
+      if (s.blast) { p.x += p.vx; p.y += p.vy; p.vx *= .97; p.vy = p.vy*.97 + .05; p.a -= REDUCE ? 1 : .025; }
+      else { const a = p.ph + S.t*p.sp, R = s.r*p.rr*(1 + .15*Math.sin(S.t*2 + p.ph)); p.x += (s.cx + Math.cos(a)*R - p.x)*(REDUCE ? 1 : .15); p.y += (s.cy + Math.sin(a)*R*.8 - p.y)*(REDUCE ? 1 : .15); }
+      if (p.a <= 0) continue;
+      ctx.globalAlpha = p.a; ctx.fillStyle = ACCENT; ctx.fillRect(p.x - 1.4, p.y - 1.4, 2.8, 2.8);
+    }
+    if (s.blast) s.la = Math.max(0, s.la - .04);
+    ctx.globalAlpha = s.la*.9; ctx.fillStyle = MUTE_INK; ctx.fillText(s.label, s.cx, s.cy + s.r + 13);
+    ctx.globalAlpha = 1;
+  }
+  S.swarms = S.swarms.filter(s => !s.blast || s.la > 0 || S.phase === "scan");
+  if (S.phase === "settling" && !S.dots.some(d => d.heat > 0)) S.phase = "clean";
+  kick();
+}
+function kick() { if (!running) { running = true; requestAnimationFrame(frame); } }
+function resize() {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  S.W = r.width; S.H = r.height; cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  layout(); kick();
+}
+new ResizeObserver(resize).observe(cv);
+new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).observe(cv);
+document.addEventListener("visibilitychange", kick);
+
+/* ---------- UI state ---------- */
+const $ = id => document.getElementById(id);
+const chip = $("sc-chip"), list = $("sc-fields"), meta = $("sc-meta"), go = $("sc-go"), pick = $("sc-pick"), input = $("sc-file"), card = $("scrub");
+const SAMPLE = {
+  name: "IMG_4127.jpg", size: 3251300, metaBytes: 16538,
+  fields: [
+    { g: "Location", k: "GPS", v: "40.71280° N, 74.00600° W" },
+    { g: "Location", k: "Altitude", v: "12.4 m above sea level" },
+    { g: "Time", k: "Taken", v: "2026:09:14 18:22:07 −04:00" },
+    { g: "Device", k: "Camera", v: "Apple iPhone 15 Pro" },
+    { g: "Device", k: "Lens", v: "back triple camera 6.86mm f/1.78" },
+    { g: "Software", k: "Software", v: "18.6.2" },
+    { g: "Identity", k: "Image ID", v: "4F2A9C1E7B3D4E0F9A61C2D8B5E3F710" }
+  ],
+  segments: [
+    { name: "SOI", bytes: 2, keep: true }, { name: "APP0 JFIF", bytes: 18, keep: true },
+    { name: "APP1 Exif", bytes: 12408, keep: false }, { name: "APP1 XMP", bytes: 4130, keep: false },
+    { name: "APP2 ICC", bytes: 3144, keep: true }, { name: "DQT", bytes: 134, keep: true }, { name: "SOF", bytes: 19, keep: true },
+    { name: "DHT", bytes: 418, keep: true }, { name: "SOS image data", bytes: 3231027, keep: true, data: true }
+  ]
+};
+let current = null; // { example, name, size, file, buf, info, result }
+
+function renderFields(fields) {
+  list.textContent = "";
+  if (!fields.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No location, device, time or author data found in this file."; list.appendChild(li); return; }
+  for (const f of fields) {
+    const li = document.createElement("li"); li.dataset.g = f.g.toUpperCase();
+    for (const [c, t] of [["k", f.k], ["v", f.v], ["g", f.g]]) { const s = document.createElement("span"); s.className = c; s.textContent = t; li.appendChild(s); }
+    list.appendChild(li);
+  }
+}
+function onGroupGone(label) { list.querySelectorAll(`li[data-g="${label}"]`).forEach(li => li.classList.add("gone")); }
+
+function setChip(text, cls) { chip.textContent = text; chip.className = "chip " + cls; }
+function setMeta(parts) { meta.textContent = ""; parts.forEach(p => { if (typeof p === "string") meta.append(p); else { const b = document.createElement("b"); b.textContent = p.b; meta.append(b); } }); }
+const plural = n => `${n} field${n === 1 ? "" : "s"}`;
+
+function showLeaking() {
+  const c = current, n = c.fields.length;
+  go.disabled = !(n || c.metaBytes);
+  if (c.example) { setChip(`Example · ${plural(n)}`, "leak"); go.textContent = "Scrub example"; pick.textContent = "Use my photo"; setMeta(["Example photo ", { b: c.name }, ` · ${fmtBytes(c.size)} · `, { b: fmtBytes(c.metaBytes) }, " of metadata"]); }
+  else if (n || c.metaBytes) { setChip(`Leaking · ${plural(n)}`, "leak"); go.textContent = "Scrub photo"; pick.textContent = "Choose another"; setMeta([{ b: c.name }, ` · ${c.info.format} · ${fmtBytes(c.size)} · `, { b: fmtBytes(c.metaBytes) }, " of metadata"]); }
+  else { setChip("Already clean", "clean"); go.textContent = "Nothing to remove"; pick.textContent = "Choose another"; setMeta([{ b: c.name }, ` · ${c.info.format} · ${fmtBytes(c.size)} · no metadata blocks found`]); }
+}
+
+function loadExample() {
+  current = { example: true, name: SAMPLE.name, size: SAMPLE.size, metaBytes: SAMPLE.metaBytes, fields: SAMPLE.fields, segments: SAMPLE.segments };
+  S.phase = "leaking"; S.fields = SAMPLE.fields; S.src = makeSample(); S.dots.forEach(d => d.scanned = false);
+  renderFields(SAMPLE.fields); showLeaking(); renderStrip(SAMPLE.segments, null, "IMG_4127.jpg (example)"); layout(); kick();
+}
+
+async function loadFile(file) {
+  if (!file) return;
+  setChip("Reading…", "busy"); go.disabled = pick.disabled = true;
+  try {
+    const buf = await file.arrayBuffer(), info = parseBuffer(buf);
+    let bmp;
+    try { bmp = await createImageBitmap(file); }
+    catch (_) {
+      const heic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+      throw new Error(heic ? "This browser can't open HEIC photos. On iPhone, set Settings → Camera → Formats → Most Compatible, or export the photo as JPEG." : "This file isn't an image the browser can open. Try a JPEG, PNG or WebP.");
+    }
+    if (info.format === "Unknown") throw new Error("Ghostprint reads JPEG, PNG and WebP files. Convert this one to JPEG and try again.");
+    current = { example: false, name: file.name, size: file.size, file, buf, info, fields: info.fields, metaBytes: info.metaBytes };
+    S.phase = "leaking"; S.fields = info.fields; S.src = bmp; S.swarms = []; S.dots.forEach(d => d.scanned = false);
+    renderFields(info.fields); showLeaking(); renderStrip(info.segments, null, file.name); layout(); kick();
+  } catch (err) {
+    setChip("Can't open", "busy"); setMeta([err.message]); go.disabled = true;
+  } finally { pick.disabled = false; }
+}
+
+let pending = null;
+function scrub() {
+  if (!current || S.phase !== "leaking") return;
+  S.phase = "scan"; S.scanX = 0; S.popped = 0; S.scanStart = performance.now();
+  setChip("Scrubbing…", "busy"); go.disabled = pick.disabled = true;
+  pending = current.example ? Promise.resolve(null) : buildClean(current.file, current.buf, current.info);
+  if (!S.swarms.length) S.swarms = [];
+  kick();
+}
+async function scanFinished() {
+  let res = null, err = null;
+  try { res = await pending; } catch (e) { err = e; }
+  pick.disabled = false;
+  if (err) { setChip("Can't write", "busy"); setMeta(["The clean copy couldn't be written. Try exporting the photo as JPEG first."]); return; }
+  list.querySelectorAll("li").forEach(li => li.classList.add("gone"));
+  if (current.example) {
+    setChip("Clean · 0 fields", "clean");
+    setMeta(["Example: removed ", { b: fmtBytes(current.metaBytes) }, " of Exif and XMP. Image data untouched."]);
+    go.textContent = "Use my photo"; go.disabled = false; go.dataset.next = "pick"; pick.textContent = "Replay example";
+    renderStrip(current.segments, current.segments.filter(s => s.keep), "IMG_4127.jpg (example)");
+    return;
+  }
+  current.result = res;
+  setChip(res.leftover ? `Clean · ${plural(res.leftover)} left` : "Clean · 0 fields", res.leftover ? "leak" : "clean");
+  setMeta([res.mode === "lossless" ? "Lossless. Removed " : "Re-encoded at 92% to keep the rotation. Removed ", { b: fmtBytes(Math.max(0, current.metaBytes || res.removed)) }, ` · clean copy ${fmtBytes(res.blob.size)}, re-checked: ${res.leftover ? plural(res.leftover) + " remain" : "nothing left"}.`]);
+  go.textContent = "Save clean copy"; go.disabled = false; go.dataset.next = "save"; pick.textContent = "Choose another";
+  renderStrip(current.info.segments, res.after.segments, current.name);
+}
+
+async function saveClean() {
+  const r = current && current.result; if (!r) return;
+  const ext = { JPEG: "jpg", PNG: "png", WebP: "webp" }[r.mode === "reencoded" && current.info.format === "Unknown" ? "JPEG" : current.info.format] || "jpg";
+  const filename = current.name.replace(/\.[^.]+$/, "") + "-clean." + ext;
+  if (window.claude && typeof window.claude.use === "function") {
+    let dl = null; try { dl = await window.claude.use("downloads"); } catch (_) {}
+    if (!dl) { setMeta(["Saving isn't available in this view."]); return; }
+    try { await dl.save({ filename, data: r.blob }); setMeta(["Saved ", { b: filename }, "."]); }
+    catch (e) { setMeta([e && e.code === "declined" ? "Save cancelled." : "Couldn't save the file here."]); }
+    return;
+  }
+  const a = document.createElement("a"), url = URL.createObjectURL(r.blob);
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  setMeta(["Saved ", { b: filename }, "."]);
+}
+
+go.addEventListener("click", () => {
+  const next = go.dataset.next; delete go.dataset.next;
+  if (next === "pick") { go.dataset.next = "pick"; input.click(); }
+  else if (next === "save") { go.dataset.next = "save"; saveClean(); }
+  else scrub();
+});
+pick.addEventListener("click", () => { if (pick.textContent === "Replay example") { delete go.dataset.next; loadExample(); } else input.click(); });
+const stage = $("sc-stage");
+stage.addEventListener("click", () => { if (S.phase !== "scan") input.click(); });
+stage.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && S.phase !== "scan") { e.preventDefault(); input.click(); } });
+input.addEventListener("change", () => { delete go.dataset.next; loadFile(input.files[0]); input.value = ""; });
+let dragDepth = 0;
+document.addEventListener("dragenter", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { dragDepth++; card.classList.add("is-drag"); } });
+document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) card.classList.remove("is-drag"); });
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => {
+  e.preventDefault(); dragDepth = 0; card.classList.remove("is-drag");
+  const f = e.dataTransfer?.files?.[0];
+  if (f && S.phase !== "scan") { delete go.dataset.next; loadFile(f); }
+});
+
+/* ---------- file anatomy strip ---------- */
+function mergeSegs(segs) {
+  const out = [];
+  for (const s of segs) {
+    const short = s.name.split(" ")[0], last = out[out.length - 1];
+    if (last && last.keep && s.keep && !last.data && !s.data && (last.small && s.bytes < 2048 || last.short === short)) {
+      last.bytes += s.bytes; if (!last.parts.includes(short)) last.parts.push(short); last.name = last.parts.join(" · "); continue;
+    }
+    if (last && last.data && s.data && last.short === short) { last.bytes += s.bytes; continue; }
+    out.push({ name: s.name, bytes: s.bytes, keep: s.keep, data: !!s.data, short, parts: [short], small: s.bytes < 2048 });
+  }
+  return out;
+}
+function renderStrip(before, after, name) {
+  const b = mergeSegs(before), a = mergeSegs(after || before.filter(s => s.keep));
+  const wt = s => Math.log2(s.bytes + 4);
+  const total = b.reduce((n, s) => n + wt(s), 0) + b.length*.4;
+  const fill = (host, segs) => {
+    host.textContent = "";
+    for (const s of segs) {
+      const d = document.createElement("div");
+      d.className = "seg" + (!s.keep ? " leak" : s.data ? " data" : "");
+      d.style.width = `calc(${(wt(s)/total*100).toFixed(2)}% - 2px)`;
+      d.textContent = `${s.name} ${fmtBytes(s.bytes)}`; d.title = d.textContent;
+      host.appendChild(d);
+    }
+  };
+  fill($("strip-before"), b); fill($("strip-after"), a);
+  const tb = before.reduce((n, s) => n + s.bytes, 0), ta = (after || before.filter(s => s.keep)).reduce((n, s) => n + s.bytes, 0);
+  $("tot-before").textContent = fmtBytes(tb); $("tot-after").textContent = fmtBytes(ta);
+  $("strip-name").textContent = name;
+  $("strip-delta").textContent = tb > ta ? `−${fmtBytes(tb - ta)} of metadata` : "no metadata blocks";
+}
+
+/* ---------- boot ---------- */
+loadExample();
+let t0 = performance.now();
+function machineLoop(now) { const t = (now - t0)/1000; anim.forEach(f => f(t)); if (!REDUCE) requestAnimationFrame(machineLoop); }
+requestAnimationFrame(machineLoop);
+})();
+</script>
+
+</body>
+</html>
