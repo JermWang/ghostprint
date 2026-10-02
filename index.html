@@ -3,15 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Ghostprint strips GPS, device, time and serial metadata from photos, entirely in your browser.">
-</head>
-<body>
+<meta name="description" content="Ghostprint shows what wallet trackers can link to your Solana wallet, read-only and in your browser.">
 <title>Ghostprint</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-/* Layout: light-grey workbench page; ink panels hold live instruments; a code-drawn isometric machine is the hero; one infrared accent marks anything that leaks or gets scrubbed */
+/* Layout: light-grey workbench page; ink panels hold live instruments; a code-drawn isometric machine is the hero; one infrared accent marks anything that leaks */
 :root{
   --ground:#D6D8D9;
   --paper:#EEEFEE;
@@ -56,9 +54,8 @@ h1{font-size:clamp(2.6rem,5.8vw,4.5rem);line-height:1.02;letter-spacing:-.035em;
 .machine{display:block;width:100%;height:auto;max-width:100%}
 @media (max-width:920px){.hero{grid-template-columns:minmax(0,1fr)}.machine-wrap{max-width:560px;width:100%;margin-inline:auto}}
 
-/* scrubber instrument */
-.scrubber{background:var(--ink);color:var(--paper);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;max-width:540px;outline:2px dashed transparent;outline-offset:4px;transition:outline-color .2s;box-shadow:0 22px 40px -28px rgba(29,31,34,.9)}
-.scrubber.is-drag{outline-color:var(--accent)}
+/* tracer instrument */
+.tracer{background:var(--ink);color:var(--paper);border-radius:var(--r);padding:12px;display:flex;flex-direction:column;gap:10px;max-width:540px;outline:2px dashed transparent;outline-offset:4px;transition:outline-color .2s;box-shadow:0 22px 40px -28px rgba(29,31,34,.9)}
 .sc-head{display:flex;justify-content:space-between;align-items:center;gap:10px;font-family:var(--font-mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase}
 .live{display:flex;align-items:center;gap:8px;color:var(--mute-ink)}
 .live i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:ping 1.8s infinite}
@@ -69,14 +66,11 @@ h1{font-size:clamp(2.6rem,5.8vw,4.5rem);line-height:1.02;letter-spacing:-.035em;
 .chip.busy{color:var(--mute-ink)}
 .sc-stage{position:relative;height:214px;border-radius:8px;background:var(--ink-2);cursor:pointer;overflow:hidden}
 .sc-stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.sc-hint{position:absolute;right:10px;bottom:8px;font-family:var(--font-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute-ink);pointer-events:none}
 .sc-fields{list-style:none;margin:0;padding:0;display:grid;gap:3px;max-height:178px;overflow:auto;font-family:var(--font-mono);font-size:.74rem;line-height:1.4}
 .sc-fields li{display:grid;grid-template-columns:6.6em minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:5px 8px;border-radius:6px;background:var(--ink-2)}
 .sc-fields .k{color:var(--mute-ink);text-transform:uppercase;letter-spacing:.06em;font-size:.66rem}
 .sc-fields .v{overflow-wrap:anywhere;min-width:0}
 .sc-fields .g{color:var(--accent);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase}
-.sc-fields li.gone .v{text-decoration:line-through;text-decoration-color:var(--accent);color:var(--mute-ink)}
-.sc-fields li.gone .g{color:var(--mute-ink)}
 .sc-fields li.empty{grid-template-columns:1fr;color:var(--mute-ink)}
 .sc-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 .sc-meta{margin:0;font-family:var(--font-mono);font-size:.7rem;line-height:1.5;color:var(--mute-ink);min-width:0;flex:1 1 210px;overflow-wrap:anywhere}
@@ -125,15 +119,6 @@ h2{font-size:clamp(1.9rem,4.2vw,3.1rem);line-height:1.04;letter-spacing:-.03em;m
 .strip-box{border:1.5px solid var(--ink);border-radius:var(--r);background:var(--paper);padding:16px}
 .strip-cap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-family:var(--font-mono);font-size:.72rem;color:var(--mute);margin-bottom:12px}
 .strip-cap b{color:var(--ink);font-weight:500;overflow-wrap:anywhere}
-.strip-scroll{overflow-x:auto}
-.strip-rows{min-width:560px;display:grid;gap:8px}
-.strip-row{display:grid;grid-template-columns:4.2em minmax(0,1fr) 5.8em;gap:10px;align-items:center;font-family:var(--font-mono);font-size:.68rem}
-.strip-row .lab{text-transform:uppercase;letter-spacing:.08em;color:var(--mute)}
-.strip-row .tot{text-align:right;font-variant-numeric:tabular-nums}
-.strip{display:flex;height:34px;gap:2px}
-.seg{flex:0 0 auto;border-radius:4px;border:1.5px solid var(--ink);background:var(--paper);display:flex;align-items:center;padding-inline:5px;overflow:hidden;white-space:nowrap;font-size:.6rem;min-width:0}
-.seg.leak{background:var(--accent);border-color:var(--ink)}
-.seg.data{background:var(--ink);color:var(--paper)}
 .strip-key{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-family:var(--font-mono);font-size:.66rem;color:var(--mute)}
 .strip-key i{display:inline-block;width:10px;height:10px;border-radius:2px;border:1.5px solid var(--ink);vertical-align:-1px;margin-right:6px}
 
@@ -143,132 +128,191 @@ footer .small{margin:0;font-size:.82rem;color:var(--mute)}
 footer .word{height:16px;width:auto;margin-top:14px;display:block}
 @media (max-width:760px){footer{grid-template-columns:minmax(0,1fr)}}
 
+
+.nav-links a{white-space:nowrap}
+/* tracer */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.tr-form{display:flex;gap:8px}
+.tr-form input{flex:1;min-width:0;font:500 .76rem var(--font-mono);background:var(--ink-2);color:var(--paper);border:1.5px solid var(--ink-3);border-radius:999px;padding:9px 14px}
+.tr-form input::placeholder{color:var(--mute-ink)}
+.tr-form input:focus{outline:none;border-color:var(--accent)}
+.tracer .sc-stage{height:232px;cursor:default}
+.sc-fields{max-height:206px}
+.sc-fields li .why{grid-column:1/-1;color:var(--mute-ink);font-size:.64rem;line-height:1.35;margin-top:-2px}
+.sc-fields li.sev-med .g{color:var(--paper)}
+.sc-fields li.sev-low .g{color:var(--mute-ink)}
+.sc-fields li.sev-warn{box-shadow:inset 2px 0 0 var(--accent)}
+.tr-rpc{font-family:var(--font-mono);font-size:.68rem;color:var(--mute-ink)}
+.tr-rpc summary{cursor:pointer;letter-spacing:.1em;text-transform:uppercase;width:max-content}
+.tr-rpc input{display:block;width:100%;margin-top:8px;font:500 .72rem var(--font-mono);background:var(--ink-2);color:var(--paper);border:1.5px solid var(--ink-3);border-radius:8px;padding:7px 10px}
+.tr-rpc input:focus{outline:none;border-color:var(--accent)}
+.tr-rpc p{margin:6px 0 0;line-height:1.5}
+
+/* ghost mode band */
+.eyebrow.on-dark{color:var(--mute-ink);display:flex;align-items:center;gap:10px}
+.eyebrow.on-dark .chip{color:var(--accent);letter-spacing:.1em}
+.band-note{margin:22px 0 0;max-width:70ch;font-size:.88rem;color:var(--mute-ink)}
+
+/* token + steps glyphs */
+.step .gl{width:28px;height:28px;display:block}
+
+/* signing hours */
+.hours{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;height:118px}
+.hours .col{display:flex;flex-direction:column;gap:4px;min-width:0;border-radius:4px;padding-top:4px}
+.hours .col.q{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.hours .bw{flex:1;display:flex;align-items:flex-end;padding-inline:2px}
+.hours .bar{width:100%;background:var(--ink);border-radius:3px 3px 1px 1px;min-height:2px}
+.hours .col.q .bar{background:var(--accent)}
+.hours .h{font:500 .56rem var(--font-mono);color:var(--mute);text-align:center;height:12px;overflow:hidden}
+
 @media (prefers-reduced-motion:reduce){.live i{animation:none}.word rect{transition:none}.btn{transition:none}}
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header class="nav">
     <a class="brand" href="#top" aria-label="Ghostprint home"><span data-pixel="ghost" class="ghost"></span><span data-pixel="word" class="word"></span></a>
     <nav class="nav-links" aria-label="Sections">
-      <a href="#leaks">What leaks</a>
-      <a href="#how">How it works</a>
-      <a class="cta" href="#scrub">Scrub a photo</a>
+      <a href="#leaks">What trackers see</a>
+      <a href="#ghost">Ghost mode</a>
+      <a href="#token">Token</a>
+      <a class="cta" href="#trace">Trace a wallet</a>
     </nav>
   </header>
 
   <main>
     <section class="hero" id="top">
       <div class="hero-copy">
-        <h1>Zero Trace.<br>Every Photo.</h1>
-        <p class="kicker">Metadata scrubber for every photo you post, send or sell</p>
+        <h1>Zero Trace.<br>Every Trade.</h1>
+        <p class="kicker">Privacy terminal for Solana traders. See what trackers see, then trade without them.</p>
 
-        <div class="scrubber" id="scrub">
+        <div class="tracer" id="trace">
           <div class="sc-head">
-            <span class="live"><i></i>Local scrubber</span>
-            <span class="chip leak" id="sc-chip">Example · 7 fields</span>
+            <span class="live"><i></i>Read-only tracer</span>
+            <span class="chip leak" id="tr-chip">Example · Exposed · 83</span>
           </div>
-          <div class="sc-stage" id="sc-stage" tabindex="0" role="button" aria-label="Choose a photo to scrub, or drop one here">
-            <canvas id="sc-canvas" aria-hidden="true"></canvas>
-            <span class="sc-hint">Drop a photo here</span>
+          <form class="tr-form" id="tr-form" autocomplete="off">
+            <label class="sr" for="tr-addr">Solana wallet address</label>
+            <input id="tr-addr" name="address" placeholder="Paste a Solana wallet address" spellcheck="false" autocapitalize="off" inputmode="text">
+            <button class="btn primary" id="tr-go" type="submit">Trace</button>
+          </form>
+          <div class="sc-stage" id="tr-stage">
+            <canvas id="tr-canvas" aria-hidden="true"></canvas>
           </div>
-          <ul class="sc-fields" id="sc-fields" aria-label="Metadata found in the photo"></ul>
+          <ul class="sc-fields" id="tr-fields" aria-label="What this wallet gives away"></ul>
           <div class="sc-foot">
-            <p class="sc-meta" id="sc-meta" aria-live="polite"></p>
+            <p class="sc-meta" id="tr-meta" aria-live="polite"></p>
             <div class="btns">
-              <button class="btn" id="sc-pick" type="button">Use my photo</button>
-              <button class="btn primary" id="sc-go" type="button">Scrub example</button>
+              <button class="btn" id="tr-example" type="button" hidden>Show example</button>
+              <button class="btn" id="tr-copy" type="button" disabled>Copy result</button>
             </div>
           </div>
-          <input type="file" id="sc-file" accept="image/jpeg,image/png,image/webp" hidden>
+          <details class="tr-rpc">
+            <summary>RPC node</summary>
+            <input id="tr-rpc" aria-label="Solana RPC URL" spellcheck="false">
+            <p>Your browser sends every request straight to this node. The public one is rate limited, so a Helius, Triton or QuickNode URL traces faster.</p>
+          </details>
         </div>
 
-        <div class="assure"><span data-pixel="ghost" class="pg"></span><b>0 bytes uploaded</b><span>Your photo never leaves this tab</span></div>
+        <div class="assure"><span data-pixel="ghost" class="pg"></span><b>Read-only</b><span>No wallet connect, no signatures, nothing sent to us</span></div>
       </div>
       <div class="machine-wrap">
-        <svg id="machine" class="machine" viewBox="0 0 600 540" role="img" aria-label="Isometric scrubbing machine: a photo floats in a glass chamber while a scan plane lifts metadata tags out through the top"></svg>
+        <svg id="machine" class="machine" viewBox="0 0 600 540" role="img" aria-label="Isometric tracing machine: a wallet card floats in a glass chamber while a scan plane lifts its links out through the top"></svg>
       </div>
     </section>
 
     <section id="leaks">
       <div class="sec-head">
         <div>
-          <p class="eyebrow">What a photo carries</p>
-          <h2>One photo.<br>Four ways to find you.</h2>
+          <p class="eyebrow">What trackers see</p>
+          <h2>One wallet.<br>Four ways to find you.</h2>
         </div>
-        <p>Phones and cameras write a hidden record into every file. Social apps often strip it, but email attachments, cloud links, forums and marketplace listings usually pass it along untouched.</p>
+        <p>Wallet trackers don't hack anything. They read the same public chain you do and connect the dots automatically, for every wallet, all day.</p>
       </div>
       <div class="leak-grid">
         <article class="leak-card">
-          <div class="art" data-icon="gps"></div>
-          <div class="body"><h3>Where you stood</h3><code>GPSLatitude 40.71280° N</code><p>Phones record coordinates to within a few meters. A photo taken on your porch carries your address.</p></div>
-        </article>
-        <article class="leak-card">
-          <div class="art" data-icon="camera"></div>
-          <div class="body"><h3>What you carry</h3><code>Model iPhone 15 Pro</code><p>Make, model and lens narrow down who took a photo, and they repeat on every shot from the same phone.</p></div>
-        </article>
-        <article class="leak-card">
-          <div class="art" data-icon="clock"></div>
-          <div class="body"><h3>When you were there</h3><code>DateTimeOriginal 18:22:07 −04:00</code><p>A timestamp with a time-zone offset places you in a region and an hour, even with location turned off.</p></div>
+          <div class="art" data-icon="funding"></div>
+          <div class="body"><h3>Where your SOL came from</h3><code>Funded by FrzG…rtmG · 2.5 SOL</code><p>A wallet's first deposit is its fingerprint. Every other wallet funded from the same place gets grouped with yours.</p></div>
         </article>
         <article class="leak-card">
           <div class="art" data-icon="serial"></div>
-          <div class="body"><h3>Which device, exactly</h3><code>BodySerialNumber 052021003418</code><p>Serial numbers and unique image IDs link photos posted from different accounts back to one camera.</p></div>
+          <div class="body"><h3>Who you are</h3><code>Withdrawal from Binance 2</code><p>Exchanges hold your passport. One withdrawal or deposit ties the wallet to your name in their records, and in any leak of them.</p></div>
+        </article>
+        <article class="leak-card">
+          <div class="art" data-icon="linked"></div>
+          <div class="body"><h3>Your other wallets</h3><code>3 wallets · 41 transfers</code><p>Moving funds between your own wallets links them for good. A fresh wallet stops being fresh the moment you top it up.</p></div>
+        </article>
+        <article class="leak-card">
+          <div class="art" data-icon="clock"></div>
+          <div class="body"><h3>When you're awake</h3><code>Quiet 05:00–12:00 UTC</code><p>The hours you sign in, and the hours you don't, narrow you down to a time zone.</p></div>
         </article>
       </div>
     </section>
 
-    <section class="band" aria-labelledby="band-h">
-      <h2 id="band-h">Your camera roll<br>keeps a diary.</h2>
-      <p class="shout"><span>&gt;&gt;&gt;</span>Ghostprint tears out the pages.</p>
+    <section class="band" id="ghost" aria-labelledby="band-h">
+      <p class="eyebrow on-dark"><span class="chip">In development</span> Ghost mode</p>
+      <h2 id="band-h">Your wallet<br>keeps a diary.</h2>
+      <p class="shout"><span>&gt;&gt;&gt;</span>Ghost mode tears out the pages.</p>
       <div class="feat-grid">
-        <div class="feat"><span data-pixel="lock"></span><h3>Nothing uploads</h3><p>Your photo is read and rewritten inside this tab. Close it and nothing is left anywhere.</p></div>
-        <div class="feat"><span data-pixel="file"></span><h3>Lossless when it can be</h3><p>For JPEG, PNG and WebP, only the metadata blocks are cut. The image data is copied byte for byte.</p></div>
-        <div class="feat"><span data-pixel="rotate"></span><h3>Rotation stays right</h3><p>If a photo depends on its orientation tag, Ghostprint bakes the rotation into the pixels first.</p></div>
-        <div class="feat"><span data-pixel="palette"></span><h3>Colors stay true</h3><p>Color profiles are kept so skin tones and skies don't shift. They describe the screen, not you.</p></div>
+        <div class="feat"><span data-pixel="ghost"></span><h3>Fresh wallet per trade</h3><p>Each buy runs from a new wallet with no history. Trackers see a stranger every time.</p></div>
+        <div class="feat"><span data-pixel="lock"></span><h3>Shielded return</h3><p>Profits come back through shielded pools already live on Solana. We don't run a mixer of our own.</p></div>
+        <div class="feat"><span data-pixel="clock"></span><h3>Split and jittered</h3><p>Amounts are split and delays randomized, because trackers match wallets by size and timing.</p></div>
+        <div class="feat"><span data-pixel="fuel"></span><h3>Relayer-paid gas</h3><p>Fresh wallets get gas from staked relayers, never from your main wallet.</p></div>
+      </div>
+      <p class="band-note">Ghost mode is a toggle. When you need raw speed, trade normally. Nothing makes a wallet untraceable; Ghost mode makes it much more expensive to trace.</p>
+    </section>
+
+    <section id="token">
+      <div class="sec-head">
+        <div>
+          <p class="eyebrow">The token</p>
+          <h2>Every use is a job, not a badge.</h2>
+        </div>
+        <p>Ghost mode charges a fee on the trades it routes. The token ties that fee to the people who use the network and the people who run it. The ticker and launch details aren't public yet.</p>
+      </div>
+      <div class="steps">
+        <div class="step"><span data-pixel="stairs" class="gl"></span><h3>Fee tiers</h3><p>Hold more, pay less on every Ghost mode trade.</p></div>
+        <div class="step"><span data-pixel="flame" class="gl"></span><h3>Buyback from fees</h3><p>A share of trading fees, earned in SOL, buys the token back.</p></div>
+        <div class="step"><span data-pixel="stack" class="gl"></span><h3>Relayer stake</h3><p>Relayers stake to fund gas for fresh wallets. Censoring or leaking a trade costs them the stake.</p></div>
+        <div class="step"><span data-pixel="link" class="gl"></span><h3>Referrals</h3><p>Bring traders and earn a cut of their fees, paid in the token.</p></div>
       </div>
     </section>
 
     <section id="how">
       <div class="sec-head">
         <div>
-          <p class="eyebrow">How it works</p>
-          <h2>Three steps, all in this tab.</h2>
+          <p class="eyebrow">How Trace works</p>
+          <h2>Three steps, nothing to sign.</h2>
         </div>
-        <p>A photo file is a stack of labeled blocks. Ghostprint reads each block's label, decodes the ones that describe you, and writes a new file without them.</p>
+        <p>Trace reads the same public data trackers do. Your browser asks a Solana RPC node directly; Ghostprint has no server in between.</p>
       </div>
       <div class="steps">
-        <div class="step"><span class="n">STEP 1</span><h3>Drop a photo</h3><p>JPEG, PNG or WebP. The file is read into this tab's memory and sent nowhere.</p></div>
-        <div class="step"><span class="n">STEP 2</span><h3>See what it carries</h3><p>GPS, device, timestamps, serials, editing software and XMP packets, decoded into plain language.</p></div>
-        <div class="step"><span class="n">STEP 3</span><h3>Save the clean copy</h3><p>The metadata blocks are cut out and the clean file is checked again before you save it.</p></div>
+        <div class="step"><span class="n">STEP 1</span><h3>Paste any address</h3><p>No wallet connection, no signature, no account. You can trace any wallet, not only yours.</p></div>
+        <div class="step"><span class="n">STEP 2</span><h3>Read public history</h3><p>Up to 100 recent transactions, the first few ever, and one hop out to the wallets that matter most.</p></div>
+        <div class="step"><span class="n">STEP 3</span><h3>See the links</h3><p>Funding, exchanges, linked wallets, habits and poisoning attempts, scored the way trackers score them.</p></div>
       </div>
       <div class="strip-box">
-        <div class="strip-cap"><span>Inside <b id="strip-name">IMG_4127.jpg (example)</b></span><span id="strip-delta"></span></div>
-        <div class="strip-scroll">
-          <div class="strip-rows">
-            <div class="strip-row"><span class="lab">Before</span><div class="strip" id="strip-before"></div><span class="tot" id="tot-before"></span></div>
-            <div class="strip-row"><span class="lab">After</span><div class="strip" id="strip-after"></div><span class="tot" id="tot-after"></span></div>
-          </div>
-        </div>
-        <div class="strip-key"><span><i style="background:var(--accent)"></i>Metadata, removed</span><span><i style="background:var(--paper)"></i>Structure, kept</span><span><i style="background:var(--ink)"></i>Image data, untouched</span><span>Block widths are log-scaled</span></div>
+        <div class="strip-cap"><span>Signing hours for <b id="hr-name">the example wallet</b></span><span id="hr-zone"></span></div>
+        <div class="hours" id="hours" role="img" aria-label="Transactions signed per hour of the day, UTC"></div>
+        <div class="strip-key"><span><i style="background:var(--ink)"></i>Transactions signed, by hour (UTC)</span><span><i style="background:var(--accent)"></i>Quietest 7 hours</span></div>
       </div>
     </section>
   </main>
 
   <footer>
     <div>
-      <p class="big">A photo should only show what you pointed the camera at.</p>
+      <p class="big">A wallet should only show what you choose to sign.</p>
       <span data-pixel="word" class="word"></span>
     </div>
-    <p class="small">Ghostprint is a prototype. Metadata is read and removed entirely in your browser, and no file leaves this page. HEIC and RAW files aren't supported yet.</p>
+    <p class="small">Ghostprint is a prototype. Trace is read-only and runs in your browser against the RPC node you choose. Ghost mode is in development and the token is not live. Nothing here is financial advice or an offer to sell anything.</p>
   </footer>
 </div>
 
-<script>
-(() => {
-"use strict";
+<script type="module">
+import { trace, isAddress, short, DEFAULT_RPC } from "./trace.js";
 const NS = "http://www.w3.org/2000/svg";
-const css = getComputedStyle(document.documentElement);
-const T = n => css.getPropertyValue(n).trim();
+const cs = getComputedStyle(document.documentElement);
+const T = n => cs.getPropertyValue(n).trim();
 const INK = T("--ink"), PAPER = T("--paper"), ACCENT = T("--accent"), GROUND = T("--ground"),
       FACE_L = T("--face-l"), FACE_R = T("--face-r"), MUTE_INK = T("--mute-ink"), INK3 = T("--ink-3");
 const REDUCE = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -297,7 +341,12 @@ const GLYPHS = {
   lock:["..####..",".#....#.",".#....#.","########","###..###","###..###","########","########"],
   file:["#####...","#...##..","#...###.","#.....#.","#.###.#.","#.....#.","#.###.#.","#######."],
   rotate:["..###..#",".#...#.#","#.....##","#...####","#.......","#......#",".#....#.","..####.."],
-  palette:["..####..",".#....#.","#.#..#.#","#......#","#.#....#","#..##..#",".#....#.","..####.."]
+  clock:["..####..",".#....#.","#...#..#","#...#..#","#...##.#","#......#",".#....#.","..####.."],
+  fuel:["#####...","#...#.#.","#...#..#","#####..#","#####..#","#####.##","#####...","######.."],
+  stairs:["......##","......##","....####","....####","..######","..######","########","########"],
+  flame:["...#....","...##...","..###...","..####.#",".#######",".###.###",".##...##","..#####."],
+  stack:["..####..","#......#",".######.","#......#",".######.","#......#",".######.","........"],
+  link:["..##....",".#..#...",".#..#...","..####..","....#..#","....#..#",".....##.","........"]
 };
 function pixelSVG(rows, cls) {
   const cell = 10, gap = 1.4, h = rows.length, w = Math.max(...rows.map(r => r.length));
@@ -402,7 +451,7 @@ const anim = [];
   const binFace = plane(svg, leftM(10));
   el("rect", Object.assign({ x: 188, y: -34, width: 38, height: 13, fill: ACCENT, stroke: INK, "stroke-width": 1.2 }, NSS), binFace);
   const binTxt = el("text", { x: 207, y: -24.5, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 8, "font-weight": 700, fill: INK }, binFace);
-  binTxt.textContent = "META→0";
+  binTxt.textContent = "LINK→0";
   const bits = el("g", {}, svg);
   for (let i = 0; i < 3; i++) {
     const b = el("rect", { width: 6, height: 6, fill: ACCENT, stroke: INK, "stroke-width": 1 }, bits);
@@ -419,21 +468,23 @@ const anim = [];
   poly(svg, [[-56,-56,26],[-56,56,26],[-56,56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
   poly(svg, [[-56,-56,26],[56,-56,26],[56,-56,196],[-56,-56,196]], { fill: PAPER, "fill-opacity": .3, stroke: INK, "stroke-width": 1 });
 
-  // floating photo card on the y=0 plane
+  // floating wallet card on the y=0 plane
   const cardPlane = plane(svg, leftM(0));
   const card = el("g", {}, cardPlane);
   el("rect", Object.assign({ x: -40, y: -164, width: 80, height: 98, rx: 3, fill: PAPER, stroke: INK, "stroke-width": 1.5 }, NSS), card);
   el("rect", { x: -34, y: -158, width: 68, height: 58, fill: INK }, card);
-  el("circle", { cx: 14, cy: -141, r: 8, fill: ACCENT }, card);
-  el("polygon", { points: "-34,-100 -16,-126 -5,-113 9,-133 34,-104 34,-100", fill: GROUND }, card);
-  el("polygon", { points: "-34,-100 -22,-110 -8,-100", fill: MUTE_INK }, card);
-  for (let y = -155; y < -100; y += 4) for (let x = -31; x < 34; x += 4) el("circle", { cx: x, cy: y, r: .7, fill: PAPER, "fill-opacity": .22 }, card);
+  [[-108, -113], [-113, -110], [-110, -121], [-121, -117], [-117, -129], [-129, -125], [-125, -139], [-139, -147]].forEach(([o, c], i) => {
+    const x = -29 + i*8, up = c < o;
+    el("line", { x1: x + 2.5, y1: Math.min(o, c) - 3, x2: x + 2.5, y2: Math.max(o, c) + 3, stroke: up ? ACCENT : MUTE_INK, "stroke-width": 1 }, card);
+    el("rect", { x, y: Math.min(o, c), width: 5, height: Math.abs(o - c), fill: up ? ACCENT : MUTE_INK }, card);
+  });
+  for (let y = -155; y < -100; y += 4) for (let x = -31; x < 34; x += 4) el("circle", { cx: x, cy: y, r: .7, fill: PAPER, "fill-opacity": .12 }, card);
   el("rect", { x: -34, y: -93, width: 40, height: 4, fill: INK }, card);
   el("rect", { x: -34, y: -85, width: 26, height: 4, fill: MUTE_INK }, card);
   const badge = el("g", {}, card);
   el("rect", Object.assign({ x: 12, y: -95, width: 22, height: 11, rx: 2, fill: ACCENT, stroke: INK, "stroke-width": 1 }, NSS), badge);
   const bt = el("text", { x: 23, y: -86.8, "text-anchor": "middle", "font-family": "JetBrains Mono, monospace", "font-size": 7, "font-weight": 700, fill: INK }, badge);
-  bt.textContent = "EXIF";
+  bt.textContent = "TX";
 
   // scan plane
   const scan = el("polygon", { fill: ACCENT, "fill-opacity": .2, stroke: ACCENT, "stroke-width": 1.6 }, svg);
@@ -473,8 +524,8 @@ const anim = [];
   el("polyline", Object.assign({ points: "-52,210 -40,194 -32,203 -22,188 -8,210", fill: "none", stroke: INK, "stroke-width": 1.2 }, NSS), tray);
   cable([[6, 196, 7], [64, 196, 7], [64, 132, 7]]);
 
-  // metadata tags rising out of the port
-  const chipTexts = ["GPS 40.7128 N", "iPhone 15 Pro", "18:22:07 −04:00", "SN 052021003418"];
+  // the links a tracker draws, rising out of the port
+  const chipTexts = ["FUNDER FrzG…rtmG", "BINANCE 2", "PNL +412%", "AWAKE UTC−5"];
   const chips = el("g", { "font-family": "JetBrains Mono, monospace", "font-size": 10 }, svg);
   chipTexts.forEach((txt, i) => {
     const g = el("g", {}, chips), w = txt.length*6.1 + 14;
@@ -493,28 +544,30 @@ const anim = [];
 
 /* ---------- small iso icons for the leak cards ---------- */
 const ICONS = {
-  gps(svg, I) {
-    const { P, box, cyl, plane, topM } = I;
-    box(svg, -70, -70, 0, 140, 140, 10);
-    const map = plane(svg, topM(10));
-    [[-70,-28,70,-28],[-70,22,70,22],[-30,-70,-30,70],[34,-70,34,70]].forEach(([x1,y1,x2,y2]) => el("line", Object.assign({ x1, y1, x2, y2, stroke: INK, "stroke-width": 1.2 }, NSS), map));
-    el("path", Object.assign({ d: "M-70,48 C-30,30 0,70 70,40", fill: "none", stroke: MUTE_INK, "stroke-width": 3 }, NSS), map);
-    el("circle", Object.assign({ cx: 4, cy: -4, r: 16, fill: ACCENT, "fill-opacity": .35, stroke: ACCENT, "stroke-width": 1.5 }, NSS), map);
-    cyl(svg, 4, -4, 10, 2.2, 42, { top: INK, side: INK });
-    const [hx, hy] = P(4, -4, 60);
-    el("circle", { cx: hx, cy: hy, r: 12, fill: ACCENT, stroke: INK, "stroke-width": 1.4 }, svg);
-    el("circle", { cx: hx, cy: hy, r: 4, fill: INK }, svg);
+  funding(svg, I) {
+    const { box, cyl, line } = I;
+    const tube = [[-44, 10, 6], [40, 10, 6]];
+    line(svg, tube, { stroke: INK, "stroke-width": 9 });
+    line(svg, tube, { stroke: PAPER, "stroke-width": 4.5 });
+    const flow = line(svg, tube, { stroke: ACCENT, "stroke-width": 2, "stroke-dasharray": "2 12" });
+    anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*22).toFixed(1)));
+    box(svg, -92, -14, 0, 48, 48, 36);
+    [36, 41, 46].forEach((z, i) => cyl(svg, -68, 10, z, 13, 5, i === 2 ? { top: ACCENT } : {}));
+    box(svg, 40, -14, 0, 48, 48, 36);
+    cyl(svg, 64, 10, 36, 13, 5, { top: ACCENT });
   },
-  camera(svg, I) {
-    const { box, cyl, plane, leftM } = I;
-    box(svg, -52, -32, 0, 104, 64, 56);
-    box(svg, -30, -20, 56, 42, 30, 10);
-    cyl(svg, 32, -14, 56, 7, 5);
-    const f = plane(svg, leftM(32));
-    el("circle", Object.assign({ cx: -6, cy: -28, r: 21, fill: INK, stroke: INK, "stroke-width": 1.4 }, NSS), f);
-    el("circle", { cx: -6, cy: -28, r: 13, fill: INK3 }, f);
-    el("circle", { cx: -10, cy: -32, r: 4, fill: ACCENT }, f);
-    el("rect", Object.assign({ x: 26, y: -48, width: 16, height: 9, fill: PAPER, stroke: INK, "stroke-width": 1.2 }, NSS), f);
+  linked(svg, I) {
+    const { box, line } = I;
+    const spots = [[-70, -40], [30, -50], [-20, 40]];
+    const c = ([x, y]) => [x + 18, y + 18, 6];
+    [[0, 1], [1, 2], [2, 0]].forEach(([a, b], i) => {
+      const pts = [c(spots[a]), [c(spots[b])[0], c(spots[a])[1], 6], c(spots[b])];
+      line(svg, pts, { stroke: INK, "stroke-width": 8 });
+      line(svg, pts, { stroke: PAPER, "stroke-width": 4 });
+      const flow = line(svg, pts, { stroke: ACCENT, "stroke-width": 1.8, "stroke-dasharray": "2 12" });
+      anim.push(t => flow.setAttribute("stroke-dashoffset", (-t*20 - i*5).toFixed(1)));
+    });
+    spots.forEach(([x, y], i) => box(svg, x, y, 0, 36, 36, 30, i === 0 ? { top: ACCENT } : {}));
   },
   clock(svg, I) {
     const { cyl, plane, topM } = I;
@@ -544,359 +597,151 @@ document.querySelectorAll("[data-icon]").forEach(host => {
   host.appendChild(svg);
 });
 
-/* ---------- metadata reading ---------- */
-const ascii = (u8, at, n) => { let s = ""; for (let i = 0; i < n && at + i < u8.length; i++) s += String.fromCharCode(u8[at + i]); return s; };
-const fmtBytes = b => b < 1024 ? `${b} B` : b < 1048576 ? `${(b/1024).toFixed(1)} KB` : `${(b/1048576).toFixed(2)} MB`;
+/* ---------- the tracer instrument ---------- */
+const $ = id => document.getElementById(id);
+// A made-up wallet, produced by running trace.js against the test chain in test/mockchain.mjs.
+const SAMPLE = {"address": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "score": 83, "grade": "Exposed", "findings": [{"g": "Identity", "sev": "high", "k": "Exchange", "v": "Withdrawal from Binance 2 · +1 more", "why": "Exchanges hold your ID. One link ties this wallet to your name in their records."}, {"g": "Funding", "sev": "high", "k": "Funded by", "v": "FrzG…rtmG · 2.500 SOL", "why": "Trackers group every wallet that shares a funder."}, {"g": "Cluster", "sev": "high", "k": "Siblings", "v": "3 other wallets share your funder", "why": "Wallets funded from one source are treated as one owner."}, {"g": "Cluster", "sev": "high", "k": "Linked", "v": "1 wallet · 8kEF…8oXc", "why": "Funds go both ways, 5 transfers."}, {"g": "Warning", "sev": "warn", "k": "Poisoning", "v": "8kEF6vud…8oXc fakes 8kEFmWgv…8oXc", "why": "A lookalike address sent you dust so you copy it by mistake. Never copy addresses from your history."}, {"g": "Trading", "sev": "med", "k": "Trades", "v": "40 recent swaps · 12 tokens", "why": "Every entry and exit is public. Copy-traders can follow it in seconds."}, {"g": "Habits", "sev": "med", "k": "Awake", "v": "Quiet 05:00–12:00 UTC → UTC−5 ±2 · Americas", "why": "When you sign gives away roughly where you live."}, {"g": "Holdings", "sev": "med", "k": "Balance", "v": "42.14 SOL + 17 tokens visible", "why": "Anyone you pay can see this."}], "graph": {"nodes": [{"id": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "kind": "you", "label": "YOU"}, {"id": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9", "kind": "exchange", "label": "BINANCE 2", "weight": 1}, {"id": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d", "kind": "deposit", "label": "DEPOSIT", "weight": 1}, {"id": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "kind": "funder", "label": "FUNDER", "weight": 1}, {"id": "siblings", "kind": "siblings", "label": "SIBLINGS ×3", "weight": 3}, {"id": "8kEFmWgvuMw358VA4fGLd1Ma7ogT1VMiwBLoeEmY8oXc", "kind": "linked", "label": "8kEF…8oXc", "weight": 6}], "edges": [{"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"}, {"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d"}, {"a": "8gh833visUJfxqaC3dLB2o9i268R8Ae9MMCZo5Q1nQ4d", "b": "5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9"}, {"a": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "b": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL"}, {"a": "FrzGoySbKmpTTP2S8iJ1LtHaX1UXz94o21qNHBrertmG", "b": "siblings"}, {"a": "BFWfa5Ln2yuZKKLRQtQB5MaS12e2sRdHmi46mgoM7npL", "b": "8kEFmWgvuMw358VA4fGLd1Ma7ogT1VMiwBLoeEmY8oXc"}]}, "hours": {"histogram": [2, 3, 2, 3, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 2, 4, 2, 3, 2, 6, 2, 3, 3], "quietStart": 5, "zone": "UTC−5 ±2 · Americas"}, "scanned": 49, "signatureCount": 49};
 
-function addField(out, g, k, v) {
-  if (v === undefined || v === null || v === "") return;
-  if (out.fields.some(f => f.k === k)) return;
-  out.fields.push({ g, k, v: String(v).slice(0, 160) });
-}
+const cv = $("tr-canvas"), ctx = cv.getContext("2d");
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const ACC = rgb(ACCENT), PAP = rgb(PAPER), MUT = rgb(MUTE_INK);
+const mix = (from, h) => `rgb(${from.map((c, i) => Math.round(c + (ACC[i] - c)*h)).join(",")})`;
+const COL = { paper: PAPER, acc: ACCENT, mute: MUTE_INK };
+const G = { W: 0, H: 0, dots: [], grid: [], edges: [], labels: [], you: { x: 0, y: 0 }, phase: "done", result: SAMPLE, start: 0, frac: 0, shown: 0 };
+const RAD = { you: 24, exchange: 16, funder: 14, linked: 10, deposit: 8 };
+const RING = { funder: 0, siblings: 1, exchange: 2, linked: 3 };
 
-function readTIFF(dv, t, out) {
-  if (t + 8 > dv.byteLength) return;
-  const le = dv.getUint16(t) === 0x4949;
-  const g16 = o => dv.getUint16(t + o, le), g32 = o => dv.getUint32(t + o, le);
-  if (g16(2) !== 42) return;
-  const SZ = { 1:1, 2:1, 3:2, 4:4, 5:8, 7:1, 9:4, 10:8 };
-  function val(type, count, vo) {
-    const size = (SZ[type] || 1) * count;
-    const at = size > 4 ? g32(vo) : vo;
-    if (t + at + size > dv.byteLength) return null;
-    switch (type) {
-      case 2: { let s = ""; for (let i = 0; i < count; i++) { const c = dv.getUint8(t + at + i); if (!c) break; s += String.fromCharCode(c); } return s.trim(); }
-      case 3: return count === 1 ? g16(at) : Array.from({ length: count }, (_, i) => g16(at + i*2));
-      case 4: return count === 1 ? g32(at) : Array.from({ length: count }, (_, i) => g32(at + i*4));
-      case 5: case 10: {
-        const a = [];
-        for (let i = 0; i < count; i++) {
-          const n = type === 5 ? g32(at + i*8) : dv.getInt32(t + at + i*8, le);
-          const d = type === 5 ? g32(at + i*8 + 4) : dv.getInt32(t + at + i*8 + 4, le);
-          a.push(d ? n/d : 0);
-        }
-        return count === 1 ? a[0] : a;
-      }
-      case 7: return { bytes: count };
-      default: return null;
+function disc(cx, cy, R, col, out) {
+  const p = 4.2, rows = Math.ceil(R/(p*.866));
+  for (let row = -rows; row <= rows; row++) {
+    const y = row*p*.866;
+    for (let x = -R + (row & 1 ? p/2 : 0); x <= R; x += p) {
+      const d = Math.hypot(x, y);
+      if (d <= R) out.push({ tx: cx + x, ty: cy + y, tr: 1.7*(1 - .5*(d/R)**2), col });
     }
   }
-  function ifd(off) {
-    const m = {};
-    if (!off || t + off + 2 > dv.byteLength) return m;
-    const n = g16(off);
-    for (let i = 0; i < n && i < 512; i++) {
-      const e = off + 2 + i*12;
-      if (t + e + 12 > dv.byteLength) break;
-      try { m[g16(e)] = val(g16(e + 2), g32(e + 4), e + 8); } catch (_) {}
-    }
-    return m;
-  }
-  const t0 = ifd(g32(4)), ex = ifd(t0[0x8769]), gps = ifd(t0[0x8825]);
-  if (t0[0x0112]) out.orientation = t0[0x0112];
-
-  if (gps[2] && gps[4]) {
-    const dec = v => Array.isArray(v) ? v[0] + (v[1] || 0)/60 + (v[2] || 0)/3600 : v;
-    addField(out, "Location", "GPS", `${dec(gps[2]).toFixed(5)}° ${gps[1] || "N"}, ${dec(gps[4]).toFixed(5)}° ${gps[3] || "E"}`);
-  }
-  if (typeof gps[6] === "number") addField(out, "Location", "Altitude", `${gps[6].toFixed(1)} m ${gps[5] === 1 ? "below" : "above"} sea level`);
-  if (typeof gps[0x11] === "number") addField(out, "Location", "Facing", `${Math.round(gps[0x11])}°`);
-  const taken = ex[0x9003] || t0[0x0132];
-  if (taken) addField(out, "Time", "Taken", taken + (ex[0x9011] ? " " + ex[0x9011] : ""));
-  const make = t0[0x010F], model = t0[0x0110];
-  if (make || model) addField(out, "Device", "Camera", model && make && !model.startsWith(make) ? `${make} ${model}` : (model || make));
-  addField(out, "Device", "Lens", ex[0xA434]);
-  addField(out, "Identity", "Serial", ex[0xA431]);
-  addField(out, "Identity", "Lens serial", ex[0xA435]);
-  addField(out, "Identity", "Owner", ex[0xA430]);
-  addField(out, "Identity", "Image ID", ex[0xA420]);
-  addField(out, "Author", "Artist", t0[0x013B]);
-  addField(out, "Author", "Copyright", t0[0x8298]);
-  addField(out, "Software", "Software", t0[0x0131]);
-  addField(out, "Other", "Caption", t0[0x010E]);
-  if (ex[0x927C] && ex[0x927C].bytes) addField(out, "Hidden", "Maker notes", `${fmtBytes(ex[0x927C].bytes)} of vendor data`);
-}
-
-function readXMP(text, out, bytes) {
-  const props = (text.match(/\s[A-Za-z]+:[A-Za-z]+="/g) || []).length + (text.match(/<[A-Za-z]+:[A-Za-z]+>[^<]/g) || []).length;
-  const get = name => { const m = text.match(new RegExp(`${name}="([^"]*)"|<${name}>([^<]*)<`)); return m ? (m[1] || m[2] || "").trim() : ""; };
-  addField(out, "Hidden", "XMP packet", `${fmtBytes(bytes)} · ${props} properties`);
-  const city = get("photoshop:City"), country = get("photoshop:Country");
-  if (city || country) addField(out, "Location", "Place", [city, country].filter(Boolean).join(", "));
-  const creator = (text.match(/<dc:creator>[\s\S]*?<rdf:li[^>]*>([^<]+)</) || [])[1];
-  addField(out, "Author", "Creator", creator && creator.trim());
-  addField(out, "Software", "Edited with", get("xmp:CreatorTool"));
-}
-
-const SOF = new Set([0xC0,0xC1,0xC2,0xC3,0xC5,0xC6,0xC7,0xC9,0xCA,0xCB,0xCD,0xCE,0xCF]);
-function parseJPEG(dv, u8, out) {
-  out.segments.push({ name: "SOI", bytes: 2, keep: true });
-  let p = 2;
-  while (p + 4 <= u8.length) {
-    if (u8[p] !== 0xFF) return;
-    const m = u8[p + 1];
-    if (m === 0xFF) { p++; continue; }
-    if ((m >= 0xD0 && m <= 0xD7) || m === 0x01) { p += 2; continue; }
-    if (m === 0xD9) return;
-    if (m === 0xDA) { out.sosAt = p; out.segments.push({ name: "SOS image data", bytes: u8.length - p, keep: true, data: true }); return; }
-    const len = dv.getUint16(p + 2), s = p + 4, end = p + 2 + len;
-    if (len < 2 || end > u8.length) return;
-    let name = "FF" + m.toString(16).toUpperCase(), keep = true;
-    if (m === 0xE0) name = ascii(u8, s, 4) === "JFIF" ? "APP0 JFIF" : "APP0";
-    else if (m === 0xE1) {
-      keep = false;
-      if (ascii(u8, s, 4) === "Exif") { name = "APP1 Exif"; readTIFF(dv, s + 6, out); }
-      else if (ascii(u8, s, 28) === "http://ns.adobe.com/xap/1.0/") { name = "APP1 XMP"; readXMP(new TextDecoder().decode(u8.subarray(s + 29, end)), out, len + 2); }
-      else name = "APP1";
-    }
-    else if (m === 0xE2) { const icc = ascii(u8, s, 11) === "ICC_PROFILE"; name = icc ? "APP2 ICC" : "APP2"; keep = icc; }
-    else if (m === 0xED) { name = "APP13 IPTC"; keep = false; addField(out, "Hidden", "IPTC block", `${fmtBytes(len + 2)} of captions, keywords or credits`); }
-    else if (m === 0xEE) name = "APP14 Adobe";
-    else if (m >= 0xE3 && m <= 0xEF) { name = "APP" + (m - 0xE0); keep = false; }
-    else if (m === 0xFE) { name = "COM"; keep = false; addField(out, "Other", "Comment", new TextDecoder().decode(u8.subarray(s, Math.min(end, s + 120))).replace(/\0/g, "").trim()); }
-    else if (m === 0xDB) name = "DQT";
-    else if (m === 0xC4) name = "DHT";
-    else if (m === 0xDD) name = "DRI";
-    else if (SOF.has(m)) name = "SOF";
-    out.segments.push({ name, bytes: len + 2, keep, start: p, end });
-    if (!keep) out.metaBytes += len + 2;
-    p = end;
-  }
-}
-
-const PNG_DROP = new Set(["tEXt", "iTXt", "zTXt", "eXIf", "tIME"]);
-function parsePNG(dv, u8, out) {
-  out.segments.push({ name: "Signature", bytes: 8, keep: true, start: 0, end: 8 });
-  let p = 8;
-  while (p + 12 <= u8.length) {
-    const len = dv.getUint32(p), type = ascii(u8, p + 4, 4), ds = p + 8, end = p + 12 + len;
-    if (end > u8.length) break;
-    const drop = PNG_DROP.has(type);
-    if (type === "tEXt" || type === "iTXt" || type === "zTXt") {
-      const z = u8.indexOf(0, ds), kw = ascii(u8, ds, Math.max(0, Math.min(z, ds + 79) - ds));
-      let txt = "";
-      if (type === "tEXt") txt = ascii(u8, z + 1, Math.min(end - 4, z + 1 + 4000) - (z + 1));
-      else if (type === "iTXt" && u8[z + 1] === 0) { let q = z + 3; q = u8.indexOf(0, q) + 1; q = u8.indexOf(0, q) + 1; txt = new TextDecoder().decode(u8.subarray(q, end - 4)); }
-      if (/xmp/i.test(kw) && txt) readXMP(txt, out, len + 12);
-      else {
-        const k = kw || "Text";
-        const g = /author|artist|copyright/i.test(k) ? "Author" : /software/i.test(k) ? "Software" : /time|date/i.test(k) ? "Time" : "Other";
-        addField(out, g, k.slice(0, 18), txt ? txt.slice(0, 120) : `compressed text, ${fmtBytes(len)}`);
-      }
-    } else if (type === "eXIf") readTIFF(dv, ds, out);
-    else if (type === "tIME") addField(out, "Time", "Saved", `${dv.getUint16(ds)}-${String(u8[ds+2]).padStart(2,"0")}-${String(u8[ds+3]).padStart(2,"0")} ${String(u8[ds+4]).padStart(2,"0")}:${String(u8[ds+5]).padStart(2,"0")}`);
-    out.segments.push({ name: type === "IDAT" ? "IDAT image data" : type, bytes: len + 12, keep: !drop, data: type === "IDAT", start: p, end });
-    if (drop) out.metaBytes += len + 12;
-    p = end;
-    if (type === "IEND") break;
-  }
-}
-
-function parseWebP(dv, u8, out) {
-  out.segments.push({ name: "RIFF header", bytes: 12, keep: true });
-  let p = 12;
-  while (p + 8 <= u8.length) {
-    const cc = ascii(u8, p, 4), size = dv.getUint32(p + 4, true), ds = p + 8, end = Math.min(u8.length, ds + size + (size & 1));
-    let keep = true;
-    if (cc === "EXIF") { keep = false; readTIFF(dv, ascii(u8, ds, 4) === "Exif" ? ds + 6 : ds, out); }
-    else if (cc === "XMP ") { keep = false; readXMP(new TextDecoder().decode(u8.subarray(ds, ds + size)), out, end - p); }
-    const data = cc === "VP8 " || cc === "VP8L" || cc === "ALPH" || cc === "ANMF";
-    out.segments.push({ name: data ? cc.trim() + " image data" : cc.trim(), bytes: end - p, keep, data, start: p, end });
-    if (!keep) out.metaBytes += end - p;
-    p = end;
-  }
-}
-
-function parseBuffer(buf) {
-  const u8 = new Uint8Array(buf), dv = new DataView(buf);
-  const out = { format: "Unknown", fields: [], segments: [], orientation: 1, metaBytes: 0, sosAt: -1 };
-  if (u8[0] === 0xFF && u8[1] === 0xD8) { out.format = "JPEG"; parseJPEG(dv, u8, out); }
-  else if (ascii(u8, 1, 3) === "PNG") { out.format = "PNG"; parsePNG(dv, u8, out); }
-  else if (ascii(u8, 0, 4) === "RIFF" && ascii(u8, 8, 4) === "WEBP") { out.format = "WebP"; parseWebP(dv, u8, out); }
-  return out;
-}
-
-/* ---------- writing the clean file ---------- */
-function concat(parts) {
-  const n = parts.reduce((a, b) => a + b.length, 0), o = new Uint8Array(n);
-  let p = 0; for (const x of parts) { o.set(x, p); p += x.length; }
-  return o;
-}
-function stripLossless(u8, info) {
-  if (info.format === "JPEG") {
-    if (info.sosAt < 0 || (info.orientation || 1) !== 1) return null;
-    const parts = [u8.subarray(0, 2)];
-    for (const s of info.segments) if (s.keep && s.start !== undefined) parts.push(u8.subarray(s.start, s.end));
-    parts.push(u8.subarray(info.sosAt));
-    return concat(parts);
-  }
-  if (info.format === "PNG") return concat(info.segments.filter(s => s.keep && s.start !== undefined).map(s => u8.subarray(s.start, s.end)));
-  if (info.format === "WebP") {
-    const parts = [];
-    for (const s of info.segments) {
-      if (!s.keep || s.start === undefined) continue;
-      let c = u8.slice(s.start, s.end);
-      if (ascii(c, 0, 4) === "VP8X") c[8] &= ~0x0C; // clear the EXIF and XMP flags
-      parts.push(c);
-    }
-    const body = concat(parts), head = new Uint8Array(12);
-    head.set([82, 73, 70, 70]); new DataView(head.buffer).setUint32(4, body.length + 4, true); head.set([87, 69, 66, 80], 8);
-    return concat([head, body]);
-  }
-  return null;
-}
-async function reencode(file, buf, info) {
-  // Keep the camera's color profile on JPEGs. Decode without color conversion so the pixels
-  // still match that profile, then splice its APP2 segments back in.
-  const icc = info.format === "JPEG" ? info.segments.filter(s => s.name === "APP2 ICC" && s.start !== undefined) : [];
-  const bmp = await createImageBitmap(file, icc.length ? { colorSpaceConversion: "none" } : undefined);
-  const c = document.createElement("canvas"); c.width = bmp.width; c.height = bmp.height;
-  c.getContext("2d").drawImage(bmp, 0, 0);
-  const type = info.format === "PNG" ? "image/png" : info.format === "WebP" ? "image/webp" : "image/jpeg";
-  const blob = await new Promise(r => c.toBlob(r, type, .92));
-  if (!blob) throw new Error("encode");
-  if (!icc.length) return blob;
-  // The canvas encoder tags its output as sRGB; swap that tag for the original profile.
-  const out = new Uint8Array(await blob.arrayBuffer()), src = new Uint8Array(buf), o = parseBuffer(out.buffer);
-  if (o.sosAt < 0) return blob;
-  const segs = o.segments.filter(s => s.start !== undefined && s.name !== "APP2 ICC").map(s => out.subarray(s.start, s.end));
-  segs.splice(o.segments[1] && o.segments[1].name.startsWith("APP0") ? 1 : 0, 0, ...icc.map(s => src.subarray(s.start, s.end)));
-  return new Blob([concat([out.subarray(0, 2), ...segs, out.subarray(o.sosAt)])], { type });
-}
-async function buildClean(file, buf, info) {
-  let blob = null, mode = "lossless";
-  const bytes = stripLossless(new Uint8Array(buf), info);
-  if (bytes) {
-    blob = new Blob([bytes], { type: file.type || "application/octet-stream" });
-    try { const b = await createImageBitmap(blob); if (b.close) b.close(); } catch (_) { blob = null; }
-  }
-  if (!blob) { mode = "reencoded"; blob = await reencode(file, buf, info); }
-  const check = parseBuffer(await blob.arrayBuffer());
-  return { blob, mode, removed: file.size - blob.size, leftover: check.fields.length, after: check };
-}
-
-/* ---------- the dot-matrix instrument ---------- */
-const cv = document.getElementById("sc-canvas"), ctx = cv.getContext("2d");
-const off = document.createElement("canvas"), octx = off.getContext("2d", { willReadFrequently: true });
-const S = { W: 0, H: 0, dots: [], swarms: [], region: null, src: null, fields: [], phase: "leaking", scanX: 0, popped: 0, t: 0 };
-const ACC = [255, 90, 36], PAP = [238, 239, 238];
-const heatColor = h => `rgb(${PAP.map((c, i) => Math.round(c + (ACC[i] - c)*h)).join(",")})`;
-
-function makeSample() {
-  const c = document.createElement("canvas"); c.width = 320; c.height = 240;
-  const g = c.getContext("2d");
-  const sky = g.createLinearGradient(0, 0, 0, 190);
-  sky.addColorStop(0, "#202226"); sky.addColorStop(.6, "#8e9399"); sky.addColorStop(1, "#e4e6e8");
-  g.fillStyle = sky; g.fillRect(0, 0, 320, 240);
-  g.fillStyle = "#fff"; g.beginPath(); g.arc(214, 104, 30, 0, 7); g.fill();
-  const ridge = (col, base, amp, seed) => { g.fillStyle = col; g.beginPath(); g.moveTo(0, 240); for (let x = 0; x <= 320; x += 8) g.lineTo(x, base - Math.abs(Math.sin(x*.018 + seed))*amp - Math.sin(x*.05 + seed*2)*amp*.18); g.lineTo(320, 240); g.fill(); };
-  ridge("#5d6167", 160, 70, 1.2); ridge("#33363b", 178, 46, 2.7); ridge("#0e0f11", 196, 26, 4.1);
-  g.fillStyle = "#5c6066"; g.fillRect(0, 196, 320, 44);
-  g.fillStyle = "#d8dadc"; for (let i = 0; i < 6; i++) g.fillRect(190 + Math.sin(i)*8, 202 + i*6, 48 - i*7, 2);
-  return c;
 }
 
 function layout() {
-  if (!S.W || !S.src) return;
-  const W = S.W, H = S.H, src = S.src;
-  const sc = Math.min((W*.5 - 18) / src.width, (H - 24) / src.height);
-  const iw = Math.max(1, Math.round(src.width*sc)), ih = Math.max(1, Math.round(src.height*sc));
-  const x0 = 12, y0 = Math.round((H - ih)/2);
-  off.width = iw; off.height = ih; octx.clearRect(0, 0, iw, ih); octx.drawImage(src, 0, 0, iw, ih);
-  const data = octx.getImageData(0, 0, iw, ih).data, pitch = Math.max(3.4, Math.min(6, iw/44)), tg = [];
-  for (let row = 0, y = pitch/2; y < ih; y += pitch*.866, row++)
-    for (let x = row % 2 ? pitch : pitch/2; x < iw; x += pitch) {
-      const i = ((y | 0)*iw + (x | 0))*4, l = (.2126*data[i] + .7152*data[i+1] + .0722*data[i+2]) / 255 * (data[i+3]/255);
-      if (l > .07) tg.push({ x: x0 + x, y: y0 + y, r: pitch*.5*(.2 + .8*l) });
-    }
-  for (let i = tg.length - 1; i > 0; i--) { const j = (Math.random()*(i + 1)) | 0; [tg[i], tg[j]] = [tg[j], tg[i]]; }
-  S.region = { x0, y0, iw, ih };
-  tg.forEach((t, i) => {
-    let d = S.dots[i];
-    if (!d) { d = { x: Math.random() < .5 ? -6 : W + 6, y: Math.random()*H, vx: 0, vy: 0, r: 0, heat: 0 }; S.dots.push(d); }
-    Object.assign(d, { tx: t.x, ty: t.y, tr: t.r, out: false });
+  const { W, H } = G;
+  if (!W) return;
+  const s = Math.min(1, W/460), you = G.you = { x: Math.max(44, W*.2), y: H*.48 };
+  G.grid = [];
+  for (let row = 0, y = 6; y < H; y += 8, row++) for (let x = row % 2 ? 6 : 10; x < W; x += 8) G.grid.push({ x, y, d: Math.hypot(x - you.x, y - you.y) });
+  const g = G.result.graph, pos = new Map(), rad = new Map(), targets = [], labels = [];
+  const me = g.nodes.find(n => n.kind === "you");
+  pos.set(me.id, you); rad.set(me.id, RAD.you*s);
+  const ring = g.nodes.filter(n => n.kind in RING).sort((a, b) => RING[a.kind] - RING[b.kind]);
+  const rx = W - you.x - 52*s, ry = H*.38;
+  ring.forEach((n, i) => {
+    const a = ring.length === 1 ? 0 : -1 + 2*i/(ring.length - 1);
+    pos.set(n.id, { x: you.x + Math.cos(a)*rx, y: you.y + Math.sin(a)*ry });
+    rad.set(n.id, (n.kind === "linked" ? RAD.linked + Math.min(4, Math.max(0, (n.weight || 3) - 3)) : RAD[n.kind] || 13)*s);
   });
-  for (let i = tg.length; i < S.dots.length; i++) S.dots[i].out = true, S.dots[i].tr = 0;
-  // leak swarms, one per group, on the right half
-  const groups = [...new Set(S.fields.map(f => f.g))];
-  const ax = W*.5 + 6, aw = W - ax - 8, cols = groups.length > 3 ? 2 : 1, rows = Math.max(1, Math.ceil(groups.length/cols));
-  const cw = aw/cols, ch = (H - 26)/rows, rad = Math.min(cw, ch)*.27;
-  const old = S.swarms;
-  S.swarms = groups.map((g, i) => {
-    const cx = ax + cw*(i % cols + .5), cy = 4 + ch*((i/cols | 0) + .5) - 6, prev = old[i];
-    const parts = prev && !prev.blast ? prev.parts : Array.from({ length: 12 }, () => ({ ph: Math.random()*6.283, rr: .35 + Math.random()*.65, sp: (.5 + Math.random())*(Math.random() < .5 ? -1 : 1), x: cx, y: cy, vx: 0, vy: 0, a: 1 }));
-    return { label: g.toUpperCase(), cx, cy, r: rad, parts, blast: S.phase === "clean", la: 1 };
+  // a deposit address sits on the way to the exchange it sweeps into
+  for (const n of g.nodes.filter(n => n.kind === "deposit")) {
+    const e = g.edges.find(e => e.a === n.id && pos.has(e.b)), to = e ? pos.get(e.b) : { x: you.x + rx*.6, y: you.y };
+    pos.set(n.id, { x: you.x + (to.x - you.x)*.5, y: you.y + (to.y - you.y)*.5 - 16*s });
+    rad.set(n.id, RAD.deposit*s);
+  }
+  for (const n of g.nodes) {
+    const p = pos.get(n.id);
+    if (!p) continue;
+    const col = n.kind === "exchange" ? "acc" : n.kind === "deposit" || n.kind === "siblings" ? "mute" : "paper";
+    if (n.kind === "siblings") {
+      const k = Math.min(7, n.weight || 3), rr = Math.max(11, 13*s);
+      for (let i = 0; i < k; i++) { const a = i/k*6.283 - 1.57; disc(p.x + Math.cos(a)*rr, p.y + Math.sin(a)*rr*.8, Math.max(5, 5.5*s), col, targets); }
+      rad.set(n.id, rr + 6);
+    } else disc(p.x, p.y, rad.get(n.id), col, targets);
+    labels.push({ x: p.x, y: n.kind === "deposit" ? p.y - rad.get(n.id) - 6 : p.y + rad.get(n.id) + 12, text: n.label, acc: n.kind === "exchange" });
+  }
+  G.labels = labels;
+  G.edges = [];
+  for (const e of g.edges) {
+    const A = pos.get(e.a), B = pos.get(e.b);
+    if (!A || !B) continue;
+    const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy), ra = rad.get(e.a) + 5, rb = rad.get(e.b) + 5, pts = [];
+    for (let d = ra; d <= L - rb; d += 6) pts.push({ x: A.x + dx*d/L, y: A.y + dy*d/L, f: (d - ra)/Math.max(1, L - ra - rb) });
+    G.edges.push({ pts, ph: (G.edges.length*.37) % 1 });
+  }
+  targets.forEach((t, i) => {
+    let d = G.dots[i];
+    if (!d) { d = { x: you.x, y: you.y, vx: 0, vy: 0, r: 0, heat: 1 }; G.dots.push(d); }
+    Object.assign(d, t, { out: false });
   });
-  if (S.phase === "clean") S.swarms = [];
-  if (REDUCE) for (const d of S.dots) { d.x = d.tx; d.y = d.ty; d.r = d.tr; }
-}
-
-function blast(s) {
-  s.blast = true;
-  for (const p of s.parts) { const a = Math.random()*6.283, v = 2 + Math.random()*4; p.vx = Math.cos(a)*v; p.vy = Math.sin(a)*v - 1; }
+  for (let i = targets.length; i < G.dots.length; i++) { G.dots[i].out = true; G.dots[i].tr = 0; }
+  if (REDUCE) for (const d of G.dots) { d.x = d.tx; d.y = d.ty; d.r = d.tr; d.heat = 0; }
 }
 
 let running = false, visible = true;
 function frame(now) {
   running = false;
   if (!visible || document.hidden) return;
-  const { W, H } = S; S.t = now/1000;
+  const { W, H } = G, t = now/1000, tracing = G.phase === "tracing";
   ctx.clearRect(0, 0, W, H);
-  // scanning sweep
-  if (S.phase === "scan" && S.region) {
-    // time-based so the sweep finishes on schedule even when frames are throttled
-    S.scanX = REDUCE ? 1e4 : (now - S.scanStart)/1200*(S.region.iw + 24);
-    const sx = S.region.x0 + S.scanX;
-    for (const d of S.dots) if (!d.scanned && d.tx <= sx) { d.scanned = true; d.heat = 1; }
-    const k = Math.min(S.swarms.length, Math.floor(S.scanX/(S.region.iw + 20)*S.swarms.length) + 1);
-    while (S.popped < k) { blast(S.swarms[S.popped]); onGroupGone(S.swarms[S.popped].label); S.popped++; }
-    if (sx <= S.region.x0 + S.region.iw + 4) {
-      const gr = ctx.createLinearGradient(sx - 26, 0, sx, 0);
-      gr.addColorStop(0, "rgba(255,90,36,0)"); gr.addColorStop(1, "rgba(255,90,36,.35)");
-      ctx.fillStyle = gr; ctx.fillRect(sx - 26, S.region.y0 - 6, 26, S.region.ih + 12);
-      ctx.fillStyle = ACCENT; ctx.fillRect(sx - 1, S.region.y0 - 8, 2, S.region.ih + 16);
-    } else if (S.popped >= S.swarms.length) { S.phase = "settling"; scanFinished(); }
-  }
-  // idle leak shimmer
-  if (S.phase === "leaking" && S.swarms.length && S.dots.length && !REDUCE)
-    for (let k = 0; k < 2; k++) { const d = S.dots[(Math.random()*S.dots.length) | 0]; d.heat = Math.max(d.heat, .55); }
-  // image dots: cool ones in one path, hot ones individually
-  ctx.fillStyle = PAPER; ctx.beginPath();
-  const hot = [];
-  let removed = false;
-  for (const d of S.dots) {
-    if (REDUCE) { d.x = d.tx; d.y = d.ty; d.r = d.tr; }
-    else { d.vx = (d.vx + (d.tx - d.x)*.07)*.8; d.vy = (d.vy + (d.ty - d.y)*.07)*.8; d.x += d.vx; d.y += d.vy; d.r += (d.tr - d.r)*.12; }
-    if (d.heat > 0) d.heat = Math.max(0, d.heat - (REDUCE ? 1 : .016));
-    if (d.out && d.r < .1) { removed = true; continue; }
-    if (d.r < .15) continue;
-    if (d.heat > .03) { hot.push(d); continue; }
-    ctx.moveTo(d.x + d.r, d.y); ctx.arc(d.x, d.y, d.r, 0, 6.283);
+  // background lattice; while tracing, a radar ring sweeps out from the wallet
+  const ring = tracing && !REDUCE ? ((now - G.start)/1600 % 1)*Math.hypot(W, H) : -99;
+  const hotGrid = [];
+  ctx.fillStyle = INK3; ctx.beginPath();
+  for (const p of G.grid) {
+    if (Math.abs(p.d - ring) < 12) { hotGrid.push(p); continue; }
+    ctx.moveTo(p.x + .8, p.y); ctx.arc(p.x, p.y, .8, 0, 6.283);
   }
   ctx.fill();
-  for (const d of hot) { ctx.fillStyle = heatColor(d.heat); ctx.beginPath(); ctx.arc(d.x, d.y, d.r*(1 + d.heat*.35), 0, 6.283); ctx.fill(); }
-  if (removed) S.dots = S.dots.filter(d => !(d.out && d.r < .1));
-  // leak swarms: square "bytes" orbiting a label
-  ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
-  for (const s of S.swarms) {
-    for (const p of s.parts) {
-      if (s.blast) { p.x += p.vx; p.y += p.vy; p.vx *= .97; p.vy = p.vy*.97 + .05; p.a -= REDUCE ? 1 : .025; }
-      else { const a = p.ph + S.t*p.sp, R = s.r*p.rr*(1 + .15*Math.sin(S.t*2 + p.ph)); p.x += (s.cx + Math.cos(a)*R - p.x)*(REDUCE ? 1 : .15); p.y += (s.cy + Math.sin(a)*R*.8 - p.y)*(REDUCE ? 1 : .15); }
-      if (p.a <= 0) continue;
-      ctx.globalAlpha = p.a; ctx.fillStyle = ACCENT; ctx.fillRect(p.x - 1.4, p.y - 1.4, 2.8, 2.8);
+  if (hotGrid.length) { ctx.fillStyle = ACCENT; ctx.beginPath(); for (const p of hotGrid) { ctx.moveTo(p.x + 1.2, p.y); ctx.arc(p.x, p.y, 1.2, 0, 6.283); } ctx.fill(); }
+  // edges carry a pulse in the direction funds moved
+  for (const e of G.edges) {
+    const at = REDUCE ? -9 : (t*.4 + e.ph) % 1;
+    for (const p of e.pts) {
+      const h = Math.max(0, 1 - Math.abs(p.f - at)*6);
+      ctx.fillStyle = h ? mix(MUT, h) : MUTE_INK;
+      ctx.beginPath(); ctx.arc(p.x, p.y, .9 + h*.9, 0, 6.283); ctx.fill();
     }
-    if (s.blast) s.la = Math.max(0, s.la - .04);
-    ctx.globalAlpha = s.la*.9; ctx.fillStyle = MUTE_INK; ctx.fillText(s.label, s.cx, s.cy + s.r + 13);
-    ctx.globalAlpha = 1;
   }
-  S.swarms = S.swarms.filter(s => !s.blast || s.la > 0 || S.phase === "scan");
-  if (S.phase === "settling" && !S.dots.some(d => d.heat > 0)) S.phase = "clean";
+  // node particles: settled ones batched by colour, hot ones one by one
+  const batches = { paper: [], acc: [], mute: [] }, hot = [];
+  let removed = false;
+  for (const d of G.dots) {
+    if (!REDUCE) { d.vx = (d.vx + (d.tx - d.x)*.07)*.8; d.vy = (d.vy + (d.ty - d.y)*.07)*.8; d.x += d.vx; d.y += d.vy; d.r += (d.tr - d.r)*.12; }
+    if (d.heat > 0) d.heat = Math.max(0, d.heat - (REDUCE ? 1 : .02));
+    if (d.out && d.r < .1) { removed = true; continue; }
+    if (d.r < .15) continue;
+    (d.heat > .03 ? hot : batches[d.col]).push(d);
+  }
+  for (const k in batches) {
+    if (!batches[k].length) continue;
+    ctx.fillStyle = COL[k]; ctx.beginPath();
+    for (const d of batches[k]) { ctx.moveTo(d.x + d.r, d.y); ctx.arc(d.x, d.y, d.r, 0, 6.283); }
+    ctx.fill();
+  }
+  for (const d of hot) { ctx.fillStyle = mix(d.col === "mute" ? MUT : PAP, d.heat); ctx.beginPath(); ctx.arc(d.x, d.y, d.r*(1 + d.heat*.3), 0, 6.283); ctx.fill(); }
+  if (removed) G.dots = G.dots.filter(d => !(d.out && d.r < .1));
+  // labels
+  ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
+  if (!tracing) for (const l of G.labels) {
+    const w = ctx.measureText(l.text).width/2 + 4;
+    ctx.fillStyle = l.acc ? ACCENT : MUTE_INK;
+    ctx.fillText(l.text, Math.min(W - w, Math.max(w, l.x)), Math.min(H - 4, l.y));
+  }
+  // readout
+  ctx.textAlign = "left"; ctx.fillStyle = MUTE_INK; ctx.font = "500 9px 'JetBrains Mono', monospace";
+  ctx.fillText(tracing ? "TRACING" : "EXPOSURE", 12, 18);
+  ctx.font = "700 24px 'JetBrains Mono', monospace";
+  if (tracing) { ctx.fillStyle = PAPER; ctx.fillText(`${Math.round(G.frac*100)}%`, 12, 44); }
+  else if (G.result.score !== undefined) {
+    G.shown += (G.result.score - G.shown)*(REDUCE ? 1 : .08);
+    if (Math.abs(G.result.score - G.shown) < .5) G.shown = G.result.score;
+    ctx.fillStyle = G.result.score >= 50 ? ACCENT : PAPER;
+    ctx.fillText(String(Math.round(G.shown)), 12, 44);
+    ctx.font = "500 9px 'JetBrains Mono', monospace"; ctx.fillStyle = MUTE_INK;
+    ctx.fillText(`/100 ${G.result.grade.toUpperCase()}`, 12, 58);
+  }
   kick();
 }
 function kick() { if (!running) { running = true; requestAnimationFrame(frame); } }
 function resize() {
   const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
-  S.W = r.width; S.H = r.height; cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
+  G.W = r.width; G.H = r.height; cv.width = Math.round(r.width*dpr); cv.height = Math.round(r.height*dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   layout(); kick();
 }
@@ -905,185 +750,109 @@ new IntersectionObserver(es => { visible = es[0].isIntersecting; kick(); }).obse
 document.addEventListener("visibilitychange", kick);
 
 /* ---------- UI state ---------- */
-const $ = id => document.getElementById(id);
-const chip = $("sc-chip"), list = $("sc-fields"), meta = $("sc-meta"), go = $("sc-go"), pick = $("sc-pick"), input = $("sc-file"), card = $("scrub");
-const SAMPLE = {
-  name: "IMG_4127.jpg", size: 3251300, metaBytes: 16538,
-  fields: [
-    { g: "Location", k: "GPS", v: "40.71280° N, 74.00600° W" },
-    { g: "Location", k: "Altitude", v: "12.4 m above sea level" },
-    { g: "Time", k: "Taken", v: "2026:09:14 18:22:07 −04:00" },
-    { g: "Device", k: "Camera", v: "Apple iPhone 15 Pro" },
-    { g: "Device", k: "Lens", v: "back triple camera 6.86mm f/1.78" },
-    { g: "Software", k: "Software", v: "18.6.2" },
-    { g: "Identity", k: "Image ID", v: "4F2A9C1E7B3D4E0F9A61C2D8B5E3F710" }
-  ],
-  segments: [
-    { name: "SOI", bytes: 2, keep: true }, { name: "APP0 JFIF", bytes: 18, keep: true },
-    { name: "APP1 Exif", bytes: 12408, keep: false }, { name: "APP1 XMP", bytes: 4130, keep: false },
-    { name: "APP2 ICC", bytes: 3144, keep: true }, { name: "DQT", bytes: 134, keep: true }, { name: "SOF", bytes: 19, keep: true },
-    { name: "DHT", bytes: 418, keep: true }, { name: "SOS image data", bytes: 3231027, keep: true, data: true }
-  ]
-};
-let current = null; // { example, name, size, file, buf, info, result }
-
-function renderFields(fields) {
-  list.textContent = "";
-  if (!fields.length) { const li = document.createElement("li"); li.className = "empty"; li.textContent = "No location, device, time or author data found in this file."; list.appendChild(li); return; }
-  for (const f of fields) {
-    const li = document.createElement("li"); li.dataset.g = f.g.toUpperCase();
-    for (const [c, t] of [["k", f.k], ["v", f.v], ["g", f.g]]) { const s = document.createElement("span"); s.className = c; s.textContent = t; li.appendChild(s); }
-    list.appendChild(li);
-  }
-}
-function onGroupGone(label) { list.querySelectorAll(`li[data-g="${label}"]`).forEach(li => li.classList.add("gone")); }
+const form = $("tr-form"), addrIn = $("tr-addr"), go = $("tr-go"), chip = $("tr-chip"), list = $("tr-fields"), meta = $("tr-meta");
+const copyBtn = $("tr-copy"), exampleBtn = $("tr-example"), rpcIn = $("tr-rpc");
+const pad = n => String(n).padStart(2, "0");
 
 function setChip(text, cls) { chip.textContent = text; chip.className = "chip " + cls; }
 function setMeta(parts) { meta.textContent = ""; parts.forEach(p => { if (typeof p === "string") meta.append(p); else { const b = document.createElement("b"); b.textContent = p.b; meta.append(b); } }); }
-const plural = n => `${n} field${n === 1 ? "" : "s"}`;
+function note(text) { list.textContent = ""; const li = document.createElement("li"); li.className = "empty"; li.textContent = text; list.appendChild(li); }
 
-function showLeaking() {
-  const c = current, n = c.fields.length;
-  go.disabled = !(n || c.metaBytes);
-  if (c.example) { setChip(`Example · ${plural(n)}`, "leak"); go.textContent = "Scrub example"; pick.textContent = "Use my photo"; setMeta(["Example photo ", { b: c.name }, ` · ${fmtBytes(c.size)} · `, { b: fmtBytes(c.metaBytes) }, " of metadata"]); }
-  else if (n || c.metaBytes) { setChip(`Leaking · ${plural(n)}`, "leak"); go.textContent = "Scrub photo"; pick.textContent = "Choose another"; setMeta([{ b: c.name }, ` · ${c.info.format} · ${fmtBytes(c.size)} · `, { b: fmtBytes(c.metaBytes) }, " of metadata"]); }
-  else { setChip("Already clean", "clean"); go.textContent = "Nothing to remove"; pick.textContent = "Choose another"; setMeta([{ b: c.name }, ` · ${c.info.format} · ${fmtBytes(c.size)} · no metadata blocks found`]); }
+function renderFindings(fs) {
+  list.textContent = "";
+  for (const f of fs) {
+    const li = document.createElement("li");
+    li.className = "sev-" + f.sev;
+    for (const [c, t] of [["k", f.k], ["v", f.v], ["g", f.sev === "warn" ? "Warning" : f.g], ["why", f.why]]) {
+      const s = document.createElement("span"); s.className = c; s.textContent = t; li.appendChild(s);
+    }
+    list.appendChild(li);
+  }
 }
 
-function loadExample() {
-  current = { example: true, name: SAMPLE.name, size: SAMPLE.size, metaBytes: SAMPLE.metaBytes, fields: SAMPLE.fields, segments: SAMPLE.segments };
-  S.phase = "leaking"; S.fields = SAMPLE.fields; S.src = makeSample(); S.dots.forEach(d => d.scanned = false);
-  renderFields(SAMPLE.fields); showLeaking(); renderStrip(SAMPLE.segments, null, "IMG_4127.jpg (example)"); layout(); kick();
+function renderHours(h, name) {
+  const host = $("hours"), max = Math.max(1, ...h.histogram);
+  host.textContent = "";
+  h.histogram.forEach((n, i) => {
+    const col = document.createElement("div"), bw = document.createElement("div"), bar = document.createElement("div"), lab = document.createElement("div");
+    col.className = "col" + (h.zone && (i - h.quietStart + 24) % 24 < 7 ? " q" : "");
+    col.title = `${pad(i)}:00 UTC · ${n} signed`;
+    bw.className = "bw"; bar.className = "bar"; bar.style.height = `${(n/max*100).toFixed(1)}%`;
+    lab.className = "h"; lab.textContent = i % 3 ? "" : pad(i);
+    bw.appendChild(bar); col.append(bw, lab); host.appendChild(col);
+  });
+  $("hr-name").textContent = name;
+  $("hr-zone").textContent = h.zone ? `Quiet ${pad(h.quietStart)}:00–${pad((h.quietStart + 7) % 24)}:00 UTC → ${h.zone}` : "Not enough signed transactions to place a time zone";
 }
 
-async function loadFile(file) {
-  if (!file) return;
-  setChip("Reading…", "busy"); go.disabled = pick.disabled = true;
+function show(res, example) {
+  G.result = res; G.phase = "done"; G.shown = 0;
+  for (const d of G.dots) d.heat = .9;
+  layout(); kick();
+  renderFindings(res.findings);
+  renderHours(res.hours, example ? "the example wallet" : short(res.address));
+  setChip(`${example ? "Example · " : ""}${res.grade} · ${res.score}`, res.score >= 50 ? "leak" : res.score >= 25 ? "busy" : "clean");
+  if (example) setMeta(["Example wallet, made up for this demo. ", { b: "Paste any address" }, " to trace a real one."]);
+  else setMeta([{ b: short(res.address) }, ` · read ${res.scanned} of ${res.signatureCount}${res.reachedStart ? "" : "+"} transactions${res.reachedStart ? ", back to its first" : ". Its first transactions are older than this window"}.`]);
+  copyBtn.disabled = example; exampleBtn.hidden = example;
+}
+
+const RPC_KEY = "ghostprint-rpc";
+try { rpcIn.value = localStorage.getItem(RPC_KEY) || DEFAULT_RPC; } catch (_) { rpcIn.value = DEFAULT_RPC; }
+rpcIn.addEventListener("change", () => { try { localStorage.setItem(RPC_KEY, rpcIn.value.trim()); } catch (_) {} });
+const rpcUrl = () => /^https?:\/\/\S+$/.test(rpcIn.value.trim()) ? rpcIn.value.trim() : DEFAULT_RPC;
+
+function progress(p) {
+  if (p.step === "history") { G.frac = .05; setMeta(["Reading the wallet's history…"]); }
+  else if (p.step === "transactions") { G.frac = .1 + .7*p.done/Math.max(1, p.total); setMeta([`Reading transactions ${p.done}/${p.total}`]); }
+  else if (p.step === "neighbours") { G.frac = .8 + .2*p.done/Math.max(1, p.total); setMeta([`Checking neighbouring wallets ${p.done}/${p.total}`]); }
+}
+
+let busy = false;
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  if (busy) return;
+  const a = addrIn.value.trim();
+  if (!isAddress(a)) {
+    setChip("Not an address", "busy");
+    setMeta(["Paste a Solana wallet address: 32 to 44 letters and numbers, like ", { b: "5tzF…uAi9" }, "."]);
+    addrIn.focus();
+    return;
+  }
+  busy = true; go.disabled = copyBtn.disabled = true;
+  G.result = { address: a, graph: { nodes: [{ id: a, kind: "you", label: "YOU" }], edges: [] } };
+  G.phase = "tracing"; G.start = performance.now(); G.frac = 0;
+  layout(); kick();
+  note("Reading public history…");
+  setChip("Tracing…", "busy");
   try {
-    const buf = await file.arrayBuffer(), info = parseBuffer(buf);
-    let bmp;
-    try { bmp = await createImageBitmap(file); }
-    catch (_) {
-      const heic = /heic|heif/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
-      throw new Error(heic ? "This browser can't open HEIC photos. On iPhone, set Settings → Camera → Formats → Most Compatible, or export the photo as JPEG." : "This file isn't an image the browser can open. Try a JPEG, PNG or WebP.");
-    }
-    if (info.format === "Unknown") throw new Error("Ghostprint reads JPEG, PNG and WebP files. Convert this one to JPEG and try again.");
-    current = { example: false, name: file.name, size: file.size, file, buf, info, fields: info.fields, metaBytes: info.metaBytes };
-    S.phase = "leaking"; S.fields = info.fields; S.src = bmp; S.swarms = []; S.dots.forEach(d => d.scanned = false);
-    renderFields(info.fields); showLeaking(); renderStrip(info.segments, null, file.name); layout(); kick();
+    show(await trace(a, { url: rpcUrl(), onProgress: progress }), false);
   } catch (err) {
-    setChip("Can't open", "busy"); setMeta([err.message]); go.disabled = true;
-  } finally { pick.disabled = false; }
-}
-
-let pending = null;
-function scrub() {
-  if (!current || S.phase !== "leaking") return;
-  S.phase = "scan"; S.scanX = 0; S.popped = 0; S.scanStart = performance.now();
-  setChip("Scrubbing…", "busy"); go.disabled = pick.disabled = true;
-  pending = current.example ? Promise.resolve(null) : buildClean(current.file, current.buf, current.info);
-  if (!S.swarms.length) S.swarms = [];
-  kick();
-}
-async function scanFinished() {
-  let res = null, err = null;
-  try { res = await pending; } catch (e) { err = e; }
-  pick.disabled = false;
-  if (err) { setChip("Can't write", "busy"); setMeta(["The clean copy couldn't be written. Try exporting the photo as JPEG first."]); return; }
-  list.querySelectorAll("li").forEach(li => li.classList.add("gone"));
-  if (current.example) {
-    setChip("Clean · 0 fields", "clean");
-    setMeta(["Example: removed ", { b: fmtBytes(current.metaBytes) }, " of Exif and XMP. Image data untouched."]);
-    go.textContent = "Use my photo"; go.disabled = false; go.dataset.next = "pick"; pick.textContent = "Replay example";
-    renderStrip(current.segments, current.segments.filter(s => s.keep), "IMG_4127.jpg (example)");
-    return;
-  }
-  current.result = res;
-  setChip(res.leftover ? `Clean · ${plural(res.leftover)} left` : "Clean · 0 fields", res.leftover ? "leak" : "clean");
-  setMeta([res.mode === "lossless" ? "Lossless. Removed " : "Re-encoded at 92% to keep the rotation. Removed ", { b: fmtBytes(Math.max(0, current.metaBytes || res.removed)) }, ` · clean copy ${fmtBytes(res.blob.size)}, re-checked: ${res.leftover ? plural(res.leftover) + " remain" : "nothing left"}.`]);
-  go.textContent = "Save clean copy"; go.disabled = false; go.dataset.next = "save"; pick.textContent = "Choose another";
-  renderStrip(current.info.segments, res.after.segments, current.name);
-}
-
-async function saveClean() {
-  const r = current && current.result; if (!r) return;
-  const ext = { JPEG: "jpg", PNG: "png", WebP: "webp" }[r.mode === "reencoded" && current.info.format === "Unknown" ? "JPEG" : current.info.format] || "jpg";
-  const filename = current.name.replace(/\.[^.]+$/, "") + "-clean." + ext;
-  if (window.claude && typeof window.claude.use === "function") {
-    let dl = null; try { dl = await window.claude.use("downloads"); } catch (_) {}
-    if (!dl) { setMeta(["Saving isn't available in this view."]); return; }
-    try { await dl.save({ filename, data: r.blob }); setMeta(["Saved ", { b: filename }, "."]); }
-    catch (e) { setMeta([e && e.code === "declined" ? "Save cancelled." : "Couldn't save the file here."]); }
-    return;
-  }
-  const a = document.createElement("a"), url = URL.createObjectURL(r.blob);
-  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  setMeta(["Saved ", { b: filename }, "."]);
-}
-
-go.addEventListener("click", () => {
-  const next = go.dataset.next; delete go.dataset.next;
-  if (next === "pick") { go.dataset.next = "pick"; input.click(); }
-  else if (next === "save") { go.dataset.next = "save"; saveClean(); }
-  else scrub();
-});
-pick.addEventListener("click", () => { if (pick.textContent === "Replay example") { delete go.dataset.next; loadExample(); } else input.click(); });
-const stage = $("sc-stage");
-stage.addEventListener("click", () => { if (S.phase !== "scan") input.click(); });
-stage.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && S.phase !== "scan") { e.preventDefault(); input.click(); } });
-input.addEventListener("change", () => { delete go.dataset.next; loadFile(input.files[0]); input.value = ""; });
-let dragDepth = 0;
-document.addEventListener("dragenter", e => { if ([...(e.dataTransfer?.types || [])].includes("Files")) { dragDepth++; card.classList.add("is-drag"); } });
-document.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) card.classList.remove("is-drag"); });
-document.addEventListener("dragover", e => e.preventDefault());
-document.addEventListener("drop", e => {
-  e.preventDefault(); dragDepth = 0; card.classList.remove("is-drag");
-  const f = e.dataTransfer?.files?.[0];
-  if (f && S.phase !== "scan") { delete go.dataset.next; loadFile(f); }
+    G.phase = "done";
+    setChip("Can't read", "busy");
+    setMeta([err && err.message ? err.message : "Something went wrong reading the chain."]);
+    note("No result. Check the address and the RPC node, then try again.");
+    exampleBtn.hidden = false;
+  } finally { busy = false; go.disabled = false; }
 });
 
-/* ---------- file anatomy strip ---------- */
-function mergeSegs(segs) {
-  const out = [];
-  for (const s of segs) {
-    const short = s.name.split(" ")[0], last = out[out.length - 1];
-    if (last && last.keep && s.keep && !last.data && !s.data && (last.small && s.bytes < 2048 || last.short === short)) {
-      last.bytes += s.bytes; if (!last.parts.includes(short)) last.parts.push(short); last.name = last.parts.join(" · "); continue;
-    }
-    if (last && last.data && s.data && last.short === short) { last.bytes += s.bytes; continue; }
-    out.push({ name: s.name, bytes: s.bytes, keep: s.keep, data: !!s.data, short, parts: [short], small: s.bytes < 2048 });
-  }
-  return out;
-}
-function renderStrip(before, after, name) {
-  const b = mergeSegs(before), a = mergeSegs(after || before.filter(s => s.keep));
-  const wt = s => Math.log2(s.bytes + 4);
-  const total = b.reduce((n, s) => n + wt(s), 0) + b.length*.4;
-  const fill = (host, segs) => {
-    host.textContent = "";
-    for (const s of segs) {
-      const d = document.createElement("div");
-      d.className = "seg" + (!s.keep ? " leak" : s.data ? " data" : "");
-      d.style.width = `calc(${(wt(s)/total*100).toFixed(2)}% - 2px)`;
-      d.textContent = `${s.name} ${fmtBytes(s.bytes)}`; d.title = d.textContent;
-      host.appendChild(d);
-    }
-  };
-  fill($("strip-before"), b); fill($("strip-after"), a);
-  const tb = before.reduce((n, s) => n + s.bytes, 0), ta = (after || before.filter(s => s.keep)).reduce((n, s) => n + s.bytes, 0);
-  $("tot-before").textContent = fmtBytes(tb); $("tot-after").textContent = fmtBytes(ta);
-  $("strip-name").textContent = name;
-  $("strip-delta").textContent = tb > ta ? `−${fmtBytes(tb - ta)} of metadata` : "no metadata blocks";
-}
+exampleBtn.addEventListener("click", () => { if (!busy) show(SAMPLE, true); });
+
+// Shareable summary. Addresses are masked so a copied result doesn't link wallets for anyone.
+copyBtn.addEventListener("click", async () => {
+  const r = G.result;
+  if (!r || !r.findings) return;
+  const mask = s => s.replace(/[1-9A-HJ-NP-Za-km-z]{4,8}…[1-9A-HJ-NP-Za-km-z]{4}/g, "••••");
+  const text = [`My Solana wallet exposure on Ghostprint: ${r.score}/100 (${r.grade})`, ...r.findings.map(f => `· ${f.k}: ${mask(f.v)}`), location.href.split("#")[0]].join("\n");
+  try { await navigator.clipboard.writeText(text); setMeta(["Copied. Wallet addresses are masked."]); }
+  catch (_) { setMeta(["Couldn't reach the clipboard in this view."]); }
+});
 
 /* ---------- boot ---------- */
-loadExample();
+show(SAMPLE, true);
 let t0 = performance.now();
 function machineLoop(now) { const t = (now - t0)/1000; anim.forEach(f => f(t)); if (!REDUCE) requestAnimationFrame(machineLoop); }
 requestAnimationFrame(machineLoop);
-})();
 </script>
-
 </body>
 </html>

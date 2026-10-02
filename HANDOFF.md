@@ -1,64 +1,68 @@
-# Ghostprint: handoff prompt for the next session
+# Ghostprint: handoff for the next session
 
-Paste everything below the line into the new session.
+Read this whole brief before touching anything.
 
----
+## What this is now
+Ghostprint started as an in-browser photo metadata scrubber. In October 2026 it pivoted to **on-chain privacy for Solana traders**. The scrubber is gone from the page; it's still in git history (commits `7ca1f36` and the ICC fix after it) if it's ever wanted back.
 
-You're picking up a prototype I started in another session. Read this whole brief before touching anything.
+The product plan:
+1. **Trace (built).** Paste any wallet and see what trackers link to it. It's free and read-only, and it's where new users come in.
+2. **Ghost mode (not built).** A trading-terminal toggle: each trade runs from a fresh wallet with no history, profits return through shielded pools already live on Solana (Privacy Cash, Umbra on Arcium, Token-2022 Confidential Balances), amounts and timing are split and jittered, and staked relayers pay gas for the fresh wallets. We route through existing pools rather than running a mixer.
+3. **Token (not launched).** Each use is a real job: fee tiers for holders, buyback funded by trading fees earned in SOL, relayer staking with slashing for censoring or leaking, and referrals. Deliberately no governance or revenue share. Ticker and launch details are TBD, and the page says so.
+4. **Later: Ghost links.** Stealth-address payment links that reuse the same relayers.
 
-## What this is
-**Ghostprint** is a landing page plus a working tool that strips location, device, time and serial metadata from photos, entirely in the browser. I asked for "a site like https://nullmask.io but with a different utility, along the same visual guidelines." "Ghostprint" is a working name. Nobody has checked whether the name or a domain is free.
+Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photon and Trojan. Big open risks: execution speed against those bots, privacy that is never perfect (so never say "untraceable"), and legal exposure. A Tornado Cash developer was convicted in 2025; get a lawyer before Ghost mode ships.
 
-## Where the code is
-- `index.html` is the entire site: one self-contained file with no build step. Its CSS and JS are inline, and fonts load from Google Fonts (Sora, JetBrains Mono).
-- If `index.html` isn't in the repo, recover it from the published artifact **https://claude.ai/artifact/DuMz2azcGjuQLJqruzgPqe**. Read it with the Artifact tool (`action: "read"`). That artifact is the page body without a doctype wrapper. The local `index.html` is the same content wrapped in `<!doctype html><html><head>` (charset, viewport, description meta) `<body>`.
-- When republishing to that artifact, publish the unwrapped body version (the Artifact tool adds its own skeleton) and keep the `downloads` capability, which the save button uses.
-- Local preview at the time of handoff was `python -m http.server 5178 --directory ghostprint`.
+## Code
+- `index.html`: the page. Styles are inline. It ends in one `<script type="module">` that imports `trace.js`, so **it must be served over HTTP** (`npm run serve`); opening it as a file breaks the import.
+- `trace.js`: an ES module with no dependencies.
+  - `rpcClient(url, {fetch, concurrency=4, retries=5})`: a JSON-RPC client with a concurrency cap and exponential backoff on HTTP 429/5xx and on rate-limit errors.
+  - `collect(address, {rpc, recent=100, oldest=6, maxPages=5, depthTx=15, depthWallets=5})`: pages `getSignaturesForAddress` (up to 5,000 signatures) and fetches the 100 most recent transactions plus the 6 oldest, but only if it reached the start of the history. It also fetches the balance and the count of non-zero token accounts. Then it goes **one hop out**: for the funder and the top counterparties it fetches the balance and 15 transactions. That's about 70 RPC calls for a typical wallet.
+  - `analyze(address, txs, extra)`: pure, and the main thing to test. It reads `jsonParsed` transactions (system transfers and createAccount, spl-token transfer and transferChecked, pre/post token balances) and produces:
+    - **funding**: the first incoming SOL ≥ 0.001 SOL, claimed only when the start of the history was reached.
+    - **siblings**: other wallets the funder sent SOL to.
+    - **exchanges**: a direct counterparty in `KNOWN`, or a counterparty holding ≥ 20k SOL (labelled "Likely exchange or custodian"), or a **deposit address**, meaning a counterparty that forwards to a `KNOWN` exchange or sweeps everything to one wallet and keeps itself empty.
+    - **linked wallets**, scored: funds go both ways +3, 3 or more transfers +2, ≥ 0.1 SOL +1, same funder +3; kept at a score of 3 or more.
+    - **address poisoning**: dust from an address whose first 4 and last 4 characters match a wallet you've sent to.
+    - **trades**: the owner signed, a non-transfer program was involved, and a non-quote token moved.
+    - **activity hours**: the quietest 7-hour run of signed transactions is taken as sleep, giving a UTC offset. It needs at least 25 transactions and a quiet run holding no more than 8% of activity.
+    - an **exposure score** (0–100) with a grade, findings sorted by severity, and a graph for the canvas.
+  - Transfers only count from "plain" transactions (System, Token, ATA, ComputeBudget and Memo programs), so swaps don't make DEX pools look like linked wallets.
+- `test/mockchain.mjs`: a fake chain with a seeded random generator. It contains a user wallet, a funder that also funds 3 siblings, a Binance 2 withdrawal, a linked wallet with two-way flow, a deposit address that sweeps to Binance 2, a lookalike poisoner, and 40 swaps timed so the user looks asleep from 05:00 to 12:00 UTC (UTC−5). Playwright reuses it by intercepting `api.mainnet-beta.solana.com`.
+- The page's **example** result (`SAMPLE` in `index.html`) is the engine's real output on that fake chain. If the shape of `analyze`'s output changes, regenerate it the same way.
 
-## What I learned from nullmask.io (the style reference)
-- Built with SvelteKit, with GSAP and ScrollTrigger for motion.
-- Its isometric illustrations are **Figma SVG exports**, not generated code. Fingerprints: ids like `filter0_i_3094_4332`, `BackgroundImageFix`, `bgblur_*_clip_path`, and text converted to outlines. GSAP tweens their fills between grey `#D9D9D9` and lime `#CDEF33`. Scroll steps through the phone screens.
-- The one procedural piece is the "Next wave in" countdown canvas. It draws digits to a hidden canvas, samples them onto a hex grid of dots, and particles fly to their slots. On a digit change, dots scatter with "heat" (they flash lime and cool down).
-- Style: light-grey page, near-black `#202221` panels, one neon accent, Poppins, a pixel/stencil wordmark, rounded cards with 1px dark borders, halftone dot textures, isometric line art with thick black base edges and tube-like cables.
-
-## How Ghostprint follows that style, but as its own brand
-- **Tokens** (in `:root`): ground `#D6D8D9`, paper `#EEEFEE`, ink `#1D1F22`, infrared accent `#FF5A24`. Sora for display, JetBrains Mono for labels and data. It is deliberately single-theme (no dark mode).
-- **All artwork is generated in code** (unlike nullmask):
-  - An `iso(ox, oy, scale)` toolkit: `box`, `cyl`, `poly`, `line`, plus plane matrices `topM(z)`, `leftM(y)` and `rightM(x)` for drawing 2D decals onto iso faces. Strokes use `vector-effect: non-scaling-stroke`.
-  - The hero machine: base platform with a black underside, glass chamber, floating photo card with an "EXIF" badge, a scan plane sweeping up and down, a cap with chasing LEDs, metadata tags rising out of the port, cables with flowing dashes, an intake tray, and a "META→0" shredder bin with falling bytes. Its animation callbacks are registered in an `anim[]` array.
-  - Four leak-card icons: GPS map with pin, camera, clock, serial tag.
-  - Pixel art from bitmap strings: the ghost logo, a 5×7 font for the "GHOSTPRINT" wordmark (which assembles from scattered pixels on load), and 8×8 feature glyphs.
-- **The scrubber card** (`#scrub`) is a dot-matrix canvas instrument modeled on the nullmask countdown. The photo is sampled onto a hex dot grid, with brightness driving dot size. Each metadata group shows as an orbiting swarm of square accent "bytes" with a label. "Scrub" runs a **time-based** sweep (1.2 s): dots heat up, swarms burst in step with the sweep, and the field rows strike through.
-  - The sweep is time-based on purpose. A frame-count version stalled when `requestAnimationFrame` was throttled. Keep it that way.
-- **Page sections:** nav pill → hero (headline, scrubber card, "0 bytes uploaded" pill, iso machine) → "One photo. Four ways to find you." leak cards → dark band "Your camera roll keeps a diary. >>> Ghostprint tears out the pages." with 4 features → "How it works" 3 steps plus a **file anatomy strip**. The strip shows the file's segments before and after (APP1 Exif, XMP, ICC, DQT·SOF·DHT, SOS image data) at log-scaled widths and updates for the loaded file.
-
-## How the tool works (all client-side)
-- **`parseBuffer(buf)`** detects the format and records segments with keep/drop flags.
-  - **JPEG:** walks markers; drops APP1 (Exif/XMP), APP3–13, APP15 and COM; keeps APP0, APP2 ICC, APP14 Adobe and the table segments.
-  - **PNG:** drops `tEXt iTXt zTXt eXIf tIME`.
-  - **WebP:** drops the `EXIF` and `XMP ` chunks.
-  - **`readTIFF`** decodes IFD0, the Exif IFD and the GPS IFD: GPS lat/lon (DMS → decimal), altitude, facing, DateTimeOriginal plus offset, make/model, lens, body and lens serials, owner, ImageUniqueID, artist, copyright, software, and MakerNote size.
-  - **`readXMP`** counts properties and pulls City/Country, `dc:creator` and CreatorTool.
-- **`buildClean`** does a lossless byte-level strip (`stripLossless`). For WebP it also clears the VP8X EXIF/XMP flags and rewrites the RIFF size. It confirms the result decodes with `createImageBitmap`. A JPEG with orientation ≠ 1, or a failed decode, is re-encoded through a canvas at 0.92 quality instead. Either way it re-parses the output and reports any fields left over.
-- **Saving:** inside a claude.ai artifact it uses `await window.claude.use("downloads")` then `.save({filename, data: blob})`. Opened as a plain local file, it falls back to an `<a download>` link.
-- Values from files are written with `textContent` only, never `innerHTML`. Keep it that way.
+## Visual system (kept from the scrubber)
+- Tokens: ground `#D6D8D9`, paper `#EEEFEE`, ink `#1D1F22`, infrared accent `#FF5A24`. Fonts are Sora and JetBrains Mono. Single theme on purpose.
+- All art is code: the `iso()` toolkit, pixel glyphs and the 5×7 wordmark font. The hero machine now holds a wallet card with a candlestick chart, its rising tags are tracker links, and the bin reads "LINK→0". The leak-card icons are funding (two wallets, a tube and coins), KYC (the old serial-tag card), linked wallets (three connected cubes) and a clock.
+- **The tracer canvas**: a dot-matrix graph with the wallet at left and funder, siblings, exchanges and linked wallets on an arc to the right. Deposit addresses sit halfway to their exchange. Nodes are hex-dot discs whose particles spring into place. Edges carry a pulse in the direction funds moved. While tracing, a radar ring sweeps the background lattice and the readout shows progress. It honors `prefers-reduced-motion`.
+- The "how it works" section ends with a **24-hour signing strip**, with the quiet window highlighted.
+- Values from the chain are written with `textContent` only. Keep it that way.
 
 ## What's verified and what isn't
-- **Verified:** the script parses (`node --check`). A generated JPEG with GPS/Make/Model/Software Exif was detected as 3 fields (GPS 51.50725° N, 0.12767° W). The scrub completed with a lossless strip of 202 B, and the re-check found 0 fields. The example scrub flow works visually.
-- **Not yet verified:**
-  - Real phone photos, especially iPhone JPEGs that have an orientation tag.
-  - PNG text chunks, the WebP strip path, XMP-heavy files from Lightroom or Photoshop, and IPTC.
-  - Phone-width layout (about 375 px).
-  - The published artifact in a signed-in browser.
-- **Testing gotcha:** the Claude desktop app's browser pane throttles `requestAnimationFrame` to about 2 fps during script-only steps, so animations look stuck there. Take a screenshot to force painting before judging.
+- **Verified:**
+  - `npm test` passes all 7 tests: the full trace on the fake chain, not claiming a funder when history is truncated, a fresh wallet scoring 0, address validation, the RPC client's retry and rate-limit message, refusing a time zone on thin data, and legacy string account keys.
+  - End to end in headless Chromium at 1280 px and 375 px with the RPC intercepted: bad input is rejected, the trace makes 69 calls and renders all 8 findings, there's no horizontal overflow, and there are no page errors.
+- **Not verified, and the first thing to do:**
+  - **Real mainnet data.** This cloud environment's network policy blocked `api.mainnet-beta.solana.com` and `lite-api.jup.ag`, so nothing has run against the real chain. Check:
+    - that the public RPC allows browser CORS and what its rate limits are for about 70 calls;
+    - trade detection on real Jupiter, Pump.fun and PumpSwap transactions and on trading-bot wallets;
+    - v0 transactions whose account keys come from lookup tables (in `jsonParsed` they should appear in `accountKeys`);
+    - how noisy "linked" and "deposit address" are on real wallets.
+  - Only **Binance 2** (`5tzFkiKscXHK5ZXCGbXZxdw7gTjjD1mBwuoFbhUvuAi9`) is a confirmed label. Don't add exchange addresses from memory; confirm each one on Solscan first. Wrong labels would accuse people of exchange links they don't have.
+  - The page has not been published as an artifact. The old artifact (https://claude.ai/artifact/DuMz2azcGjuQLJqruzgPqe) still shows the photo scrubber. An artifact page may also block outgoing RPC requests through its security policy, so a real deploy (any static host) is a better test.
 
-## Known issues / TODO, roughly in priority order
-1. ~~**Honesty bug:** re-encode dropped the ICC profile.~~ Fixed: `reencode` decodes with `colorSpaceConversion: "none"`, swaps the canvas encoder's own sRGB APP2 tag for the original ICC segments, and is verified in headless Chromium (rotated JPEG with GPS and ICC → one original ICC, 0 fields left, correct dimensions).
-2. Test with real files (see above) and fix any parser edge cases.
-3. Check the mobile layout. Hero tags can still crowd on narrow screens, and the scrubber's swarm labels are small.
-4. Nice-to-haves in the nullmask spirit: scroll-driven moments (GSAP ScrollTrigger, e.g. the anatomy strip animating segments out as you scroll), batch mode for multiple photos, HEIC support (needs a WASM decoder; currently it shows a "set Camera → Most Compatible" message).
-5. If this becomes a real site: decide on a framework (nullmask uses SvelteKit), name and domain, and deploy target.
+## Known limitations
+- `getSignaturesForAddress(wallet)` doesn't return incoming token transfers into an existing token account (the wallet isn't in the account keys), so incoming token transfers are undercounted. A proper fix needs an indexer such as Helius.
+- Funding is unknown for wallets with more than 5,000 transactions. The page says "not reached" instead of guessing.
+- There's no copy-trader detection yet ("who is copying your trades"). It needs per-token trade feeds, which means an indexer.
+
+## TODO, roughly in priority order
+1. Run Trace on real wallets (your own, a known trader, a fresh wallet) and tune the heuristics.
+2. Add a Helius option (enhanced transactions plus labels) for faster, deeper traces, with the public RPC as fallback.
+3. Deploy as a static site (Vercel or Cloudflare Pages). Decide on the name and domain, and check that "Ghostprint" is free.
+4. Ghost mode prototype on devnet: fresh wallet per trade, return through one existing shielded pool, relayer-paid gas.
+5. Token design doc (supply, fee split, relayer staking and slashing) and a legal review before anything launches.
 
 ## About me / how I like to work
-- I'm iterating fast on a prototype. Keep updates short, show me the page, and ask before outward-facing actions such as pushing to new remotes, deploying or buying domains.
-- My GitHub account is **JermWang**.
+- Iterating fast. Keep updates short, show me the page, and ask before outward-facing actions (pushing to new remotes, deploying, buying domains, anything token-related).
+- GitHub: **JermWang**.
