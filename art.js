@@ -353,11 +353,23 @@ export function renderIcons(root = document) {
 }
 
 /* ---------- animated flow diagrams ---------- */
+// A node's name on a dark chip floating above its top face; f is the label's font size.
+function chip(I, svg, n, f) {
+  const k = f / 10, [tx, ty] = I.P(n.x + n.w / 2, n.y + n.d / 2, n.h);
+  const g = el("g", { "font-family": MONO }, svg), h = (n.sub ? 28 : 18) * k, top = ty - 16 - h;
+  const w = (Math.max(n.label.length, (n.sub || "").length * .8) * 6.4 + 16) * k;
+  el("rect", { x: tx - w / 2, y: top, width: w, height: h, rx: 4 * k, fill: C.INK, stroke: n.tone === "accent" ? C.ACCENT : C.INK }, g);
+  el("text", { x: tx, y: top + 13 * k, "text-anchor": "middle", "font-size": f, "font-weight": 700, fill: n.tone === "accent" ? C.ACCENT : C.PAPER }, g).textContent = n.label;
+  if (n.sub) el("text", { x: tx, y: top + 23 * k, "text-anchor": "middle", "font-size": 7.5 * k, fill: C.MUTE }, g).textContent = n.sub;
+}
+
 // flow(svg, spec): isometric boxes on a plate, joined by cables; accent cubes carry a "packet" along each
 // step of `sequence` (each step is a list of link indexes that run together), and the receiving box's
-// lights blink when it arrives. Labels are printed on the boxes' front faces.
+// lights blink when it arrives. Labels are printed on the boxes' front faces;
+// with `chips` (a font size) they float above each node as flat chips instead, so a drawing shrunk
+// onto a phone stays readable.
 // node: { id, x, y, w, d, h, label, sub, tone: "paper"|"ink"|"accent", glyph, kind: "box"|"cyl" }
-export function flow(svg, { ox, oy, s = 1, nodes, links = [], sequence, plate = true, step = 1.15, rest = .9, tags = [] }) {
+export function flow(svg, { ox, oy, s = 1, nodes, links = [], sequence, plate = true, step = 1.15, rest = .9, tags = [], chips = 0 }) {
   const I = iso(ox, oy, s), byId = new Map(nodes.map(n => [n.id, { w: 60, d: 60, h: 40, tone: "paper", kind: "box", ...n }]));
   const N = [...byId.values()], centre = n => [n.x + n.w / 2, n.y + n.d / 2];
   const route = l => { const A = byId.get(l.from), B = byId.get(l.to), [ax, ay] = centre(A), [bx, by] = centre(B); return l.pts || (l.bend === "yx" ? [[ax, ay, 5], [ax, by, 5], [bx, by, 5]] : [[ax, ay, 5], [bx, ay, 5], [bx, by, 5]]); };
@@ -375,40 +387,37 @@ export function flow(svg, { ox, oy, s = 1, nodes, links = [], sequence, plate = 
     for (let i = 1; i < pts.length; i++) { const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); segs.push([pts[i - 1], pts[i], len, d]); len += d; }
     return { ...l, pts, segs, len, to: B, from: A };
   });
-  const leds = new Map();
+  const leds = new Map(), labels = [];
   N.sort((a, b) => (a.x + a.y + a.w / 2 + a.d / 2) - (b.x + b.y + b.w / 2 + b.d / 2)).forEach(n => {
     const tone = n.tone === "ink" ? { top: C.INK3, left: C.INK, right: C.INK2, stroke: C.INK } : n.tone === "accent" ? { top: C.ACCENT } : {};
     if (n.kind === "cyl") {
       const [cx, cy] = centre(n), r = Math.min(n.w, n.d) / 2;
       I.cyl(svg, cx, cy, 0, r, n.h, n.tone === "accent" ? { top: C.ACCENT } : n.tone === "ink" ? { top: C.INK3, side: C.INK } : {});
       if (n.glyph) glyphOnPlane(I.plane(svg, I.topM(n.h)), GLYPHS[n.glyph], cx, cy, r * 1.1, n.tone === "ink" ? C.PAPER : C.INK);
-      const [tx, ty] = I.P(cx, cy, n.h);
-      const g = el("g", { "font-family": MONO }, svg);
-      const w = Math.max(n.label.length, (n.sub || "").length * .8) * 6.4 + 16;
-      el("rect", { x: tx - w / 2, y: ty - 44, width: w, height: n.sub ? 28 : 18, rx: 4, fill: C.INK, stroke: n.tone === "accent" ? C.ACCENT : C.INK }, g);
-      el("text", { x: tx, y: ty - 31, "text-anchor": "middle", "font-size": 10, "font-weight": 700, fill: C.PAPER }, g).textContent = n.label;
-      if (n.sub) el("text", { x: tx, y: ty - 21, "text-anchor": "middle", "font-size": 7.5, fill: C.MUTE }, g).textContent = n.sub;
+      if (chips) labels.push(n); else chip(I, svg, n, 10);
       leds.set(n.id, []);
       return;
     }
     I.box(svg, n.x, n.y, 0, n.w, n.d, n.h, tone);
     const face = I.plane(svg, I.leftM(n.y + n.d)), ink = n.tone === "ink";
     const size = Math.min(11, (n.w - 8) / Math.max(4, n.label.length) * 1.6);
-    el("text", { x: n.x + n.w / 2, y: -n.h / 2 + (n.sub ? -1 : 3.5), "text-anchor": "middle", "font-family": MONO, "font-size": size.toFixed(1), "font-weight": 700, fill: ink ? C.PAPER : C.INK }, face).textContent = n.label;
-    if (n.sub) el("text", { x: n.x + n.w / 2, y: -n.h / 2 + 9, "text-anchor": "middle", "font-family": MONO, "font-size": Math.min(7.5, size * .78).toFixed(1), fill: ink ? C.MUTE : C.INK3 }, face).textContent = n.sub;
+    if (chips) labels.push(n);
+    else el("text", { x: n.x + n.w / 2, y: -n.h / 2 + (n.sub ? -1 : 3.5), "text-anchor": "middle", "font-family": MONO, "font-size": size.toFixed(1), "font-weight": 700, fill: ink ? C.PAPER : C.INK }, face).textContent = n.label;
+    if (n.sub && !chips) el("text", { x: n.x + n.w / 2, y: -n.h / 2 + 9, "text-anchor": "middle", "font-family": MONO, "font-size": Math.min(7.5, size * .78).toFixed(1), fill: ink ? C.MUTE : C.INK3 }, face).textContent = n.sub;
     const right = I.plane(svg, I.rightM(n.x + n.w)), ls = [];
     for (let i = 0; i < 3; i++) ls.push(el("rect", Object.assign({ x: -(n.y + n.d) + 6 + i * 8, y: -n.h + 5, width: 5, height: 3.5, fill: C.INK, stroke: C.INK, "stroke-width": .8 }, NSS), right));
     leds.set(n.id, ls);
     if (n.glyph) glyphOnPlane(I.plane(svg, I.topM(n.h)), GLYPHS[n.glyph], n.x + n.w / 2, n.y + n.d / 2, Math.min(n.w, n.d) * .5, ink ? C.PAPER : n.tone === "accent" ? C.INK : C.INK);
   });
+  labels.forEach(n => chip(I, svg, n, chips));
   // packets
   const steps = sequence || L.map((_, i) => [i]);
   const cubes = L.map(() => { const g = el("g", { stroke: C.INK, "stroke-width": 1, opacity: 0, "data-anim": "" }, svg); return { g, f: [0, 1, 2].map(i => el("polygon", { fill: i === 2 ? C.ACCENT : i === 0 ? "#D94818" : "#B83C14" }, g)) }; });
   // floating tags (2D chips) anchored to world points
   for (const tg of tags) {
-    const [x, y] = I.P(tg.at[0], tg.at[1], tg.at[2] || 0), g = el("g", { "font-family": MONO, "font-size": 9 }, svg), w = tg.text.length * 5.6 + 14;
-    el("rect", { x: x - w / 2, y: y - 9, width: w, height: 18, rx: 9, fill: tg.accent ? C.ACCENT : C.PAPER, stroke: C.INK, "stroke-width": 1.2 }, g);
-    el("text", { x, y: y + 3.2, "text-anchor": "middle", fill: C.INK, "font-weight": 700 }, g).textContent = tg.text;
+    const k = chips ? chips / 10 : 1, [x, y] = I.P(tg.at[0], tg.at[1], tg.at[2] || 0), g = el("g", { "font-family": MONO, "font-size": 9 * k }, svg), w = (tg.text.length * 5.6 + 14) * k;
+    el("rect", { x: x - w / 2, y: y - 9 * k, width: w, height: 18 * k, rx: 9 * k, fill: tg.accent ? C.ACCENT : C.PAPER, stroke: C.INK, "stroke-width": 1.2 }, g);
+    el("text", { x, y: y + 3.2 * k, "text-anchor": "middle", fill: C.INK, "font-weight": 700 }, g).textContent = tg.text;
   }
   const at = (l, p) => { const d = p * l.len; for (const [a, b, s0, len] of l.segs) if (d <= s0 + len || len === 0) { const k = len ? (d - s0) / len : 0; return [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k]; } const e = l.pts[l.pts.length - 1]; return [e[0], e[1]]; };
   const cycle = steps.length * step + rest;
