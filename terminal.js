@@ -1054,7 +1054,10 @@ async function renderGhosts(gap = 5) {
   text($("g-unlock"), "Scan further");
   list.textContent = ""; list.append(make("span", "muted mono", "Scanning ghost wallets…"));
   const recs = ghostRecords(), rows = [];
-  const used = await scanGhosts(web3, S.seed, { isUsed: pk => usedOnChain(pk).catch(() => false), known: recs.reduce((m, g) => Math.max(m, g.index), -1), gap });
+  // An RPC failure must not read as "unused": it would end the scan early and hide funded ghosts.
+  let used = [], scanErr = null;
+  try { used = await scanGhosts(web3, S.seed, { isUsed: usedOnChain, known: recs.reduce((m, g) => Math.max(m, g.index), -1), gap }); }
+  catch (e) { scanErr = e; }
   for (const r of recs) if (!used.some(u => u.index === r.index)) used.push({ index: r.index, ghost: await deriveGhost(web3, S.seed, r.index) });
   used.sort((a, b) => a.index - b.index);
   for (const { index: i, ghost } of used) {
@@ -1066,7 +1069,8 @@ async function renderGhosts(gap = 5) {
     rows.push({ i, ghost, bal: BigInt(bal), held, rec });
   }
   list.textContent = "";
-  if (!rows.length) list.append(make("span", "muted mono", "No ghost wallets with funds. Turn on Ghost mode in the trade panel to make one."));
+  if (scanErr) list.append(make("span", "muted mono", `Couldn't read ghost history from the RPC (${errMsg(scanErr)}). Showing ghosts this browser remembers; use Scan further to retry, or set your own RPC URL in Settings.`));
+  else if (!rows.length) list.append(make("span", "muted mono", "No ghost wallets with funds. Turn on Ghost mode in the trade panel to make one."));
   for (const r of rows) {
     const row = make("div", "ghost-row"), meta = make("div", "meta"), acts = make("div", "acts");
     meta.append(make("b", "", `Ghost #${r.i}`), ` · ${short(r.ghost.publicKey.toBase58())} · ${fromRaw(r.bal, 9, 4)} SOL`);

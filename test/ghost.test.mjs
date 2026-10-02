@@ -130,4 +130,5 @@ test("ghost scan finds used ghosts past gaps and always covers known indexes", a
   assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 5 })).map(g => g.index), [0, 4, 9]);
   assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 3 })).map(g => g.index), [0]);
   assert.deepEqual((await scanGhosts(web3, sig, { isUsed, gap: 3, known: 9 })).map(g => g.index), [0, 4, 9]);
+  await assert.rejects(scanGhosts(web3, sig, { isUsed: async () => { throw new Error("429"); } }), /429/);
 });
