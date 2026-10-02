@@ -353,10 +353,6 @@ export function renderIcons(root = document) {
 }
 
 /* ---------- animated flow diagrams ---------- */
-// flow(svg, spec): isometric boxes on a plate, joined by cables; accent cubes carry a "packet" along each
-// step of `sequence` (each step is a list of link indexes that run together), and the receiving box's
-// lights blink when it arrives. Labels are printed on the boxes' front faces.
-// node: { id, x, y, w, d, h, label, sub, tone: "paper"|"ink"|"accent", glyph, kind: "box"|"cyl" }
 // A node's name on a dark chip floating above its top face; f is the label's font size.
 function chip(I, svg, n, f) {
   const k = f / 10, [tx, ty] = I.P(n.x + n.w / 2, n.y + n.d / 2, n.h);
@@ -367,8 +363,12 @@ function chip(I, svg, n, f) {
   if (n.sub) el("text", { x: tx, y: top + 23 * k, "text-anchor": "middle", "font-size": 7.5 * k, fill: C.MUTE }, g).textContent = n.sub;
 }
 
-// chips: a font size. Labels then float above each node as flat chips instead of printing on its face,
-// so a drawing shrunk onto a phone stays readable.
+// flow(svg, spec): isometric boxes on a plate, joined by cables; accent cubes carry a "packet" along each
+// step of `sequence` (each step is a list of link indexes that run together), and the receiving box's
+// lights blink when it arrives. Labels are printed on the boxes' front faces;
+// with `chips` (a font size) they float above each node as flat chips instead, so a drawing shrunk
+// onto a phone stays readable.
+// node: { id, x, y, w, d, h, label, sub, tone: "paper"|"ink"|"accent", glyph, kind: "box"|"cyl" }
 export function flow(svg, { ox, oy, s = 1, nodes, links = [], sequence, plate = true, step = 1.15, rest = .9, tags = [], chips = 0 }) {
   const I = iso(ox, oy, s), byId = new Map(nodes.map(n => [n.id, { w: 60, d: 60, h: 40, tone: "paper", kind: "box", ...n }]));
   const N = [...byId.values()], centre = n => [n.x + n.w / 2, n.y + n.d / 2];
