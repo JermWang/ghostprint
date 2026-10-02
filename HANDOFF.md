@@ -53,7 +53,7 @@ You're picking up a prototype I started in another session. Read this whole brie
 - **Testing gotcha:** the Claude desktop app's browser pane throttles `requestAnimationFrame` to about 2 fps during script-only steps, so animations look stuck there. Take a screenshot to force painting before judging.
 
 ## Known issues / TODO, roughly in priority order
-1. **Honesty bug:** the re-encode path (rotated JPEGs) drops the ICC color profile, but the "Colors stay true" feature card says profiles are kept. Either carry the ICC APP2 segment into the re-encoded JPEG or reword the card.
+1. ~~**Honesty bug:** re-encode dropped the ICC profile.~~ Fixed: `reencode` decodes with `colorSpaceConversion: "none"`, swaps the canvas encoder's own sRGB APP2 tag for the original ICC segments, and is verified in headless Chromium (rotated JPEG with GPS and ICC → one original ICC, 0 fields left, correct dimensions).
 2. Test with real files (see above) and fix any parser edge cases.
 3. Check the mobile layout. Hero tags can still crowd on narrow screens, and the scrubber's swarm labels are small.
 4. Nice-to-haves in the nullmask spirit: scroll-driven moments (GSAP ScrollTrigger, e.g. the anatomy strip animating segments out as you scroll), batch mode for multiple photos, HEIC support (needs a WASM decoder; currently it shows a "set Camera → Most Compatible" message).
