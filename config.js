@@ -16,3 +16,11 @@ export const JUP_API_KEY = "";
 
 export const DEFAULT_SLIPPAGE_BPS = 300;           // 3%: memecoins move fast
 export const PRIORITY_MAX_LAMPORTS = 1_000_000;     // cap on the priority fee (0.001 SOL)
+
+// Ghost mode routes through NEAR Intents (1Click API). Without a JWT, 1Click adds a 0.1–0.2% fee
+// per route; a JWT from the NEAR Intents partner dashboard removes it. Like the Jupiter key, a JWT
+// here is public, so it belongs behind the same server proxy.
+export const ONECLICK_JWT = "";
+export const GHOST_CONFIDENTIALITY = "basic";       // "basic" or "advanced" Confidential Intents; "public" to opt out
+export const GHOST_MAX_SOL = 5;                     // per ghost buy while Ghost mode is in beta
+export const GHOST_GAS_RESERVE = 10_000_000n;       // 0.01 SOL kept in each ghost wallet for fees and token account rent

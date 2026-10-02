@@ -87,7 +87,9 @@ button{font:inherit;color:inherit}
 .chart .empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font:.78rem var(--font-mono);color:var(--mute-ink);padding:20px;background-image:radial-gradient(var(--ink-3) .8px,transparent .9px);background-size:8px 8px}
 
 .tabs{margin-top:14px}
-.tablist{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--ink-3)}
+.tablist{display:flex;gap:4px;padding:8px;border-bottom:1px solid var(--ink-3);overflow-x:auto;scrollbar-width:none}
+.tablist button{flex:none}
+@media (max-width:420px){.tablist button{padding:7px 9px;letter-spacing:.06em}}
 .tablist button{font:500 .72rem var(--font-mono);letter-spacing:.1em;text-transform:uppercase;background:none;border:0;border-radius:8px;padding:7px 12px;color:var(--mute-ink);cursor:pointer}
 .tablist button[aria-selected="true"]{background:var(--ink-3);color:var(--paper)}
 .tabpanel{padding:12px 14px 16px;min-height:120px}
@@ -143,8 +145,22 @@ tr.pick:hover td{background:var(--ink-2)}
 .ghost-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-radius:12px;border:1.5px dashed var(--ink-3)}
 .ghost-toggle b{display:block;font-size:.86rem}
 .ghost-toggle span{font:.66rem var(--font-mono);color:var(--mute-ink)}
-.switch{width:38px;height:22px;border-radius:999px;background:var(--ink-3);position:relative;flex:none;border:0;cursor:not-allowed}
-.switch::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--mute-ink)}
+.switch{width:38px;height:22px;border-radius:999px;background:var(--ink-3);position:relative;flex:none;border:0;cursor:pointer;transition:background .15s}
+.switch::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--mute-ink);transition:transform .15s,background .15s}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(16px);background:var(--ink)}
+.ghost-toggle.on{border-color:var(--accent);border-style:solid}
+.gsteps{margin:0;padding:0 0 0 18px;display:grid;gap:4px;font:.72rem var(--font-mono);color:var(--mute-ink)}
+.gsteps[hidden]{display:none}
+.gsteps li.active{color:var(--paper)}
+.gsteps li.active::marker{color:var(--accent)}
+.gsteps li.done{color:var(--up)}
+.ghost-list{display:grid;gap:8px}
+.ghost-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--ink-2);border-radius:10px;padding:10px 12px}
+.ghost-row .meta{font:.74rem var(--font-mono);color:var(--mute-ink);overflow-wrap:anywhere}
+.ghost-row .meta b{color:var(--paper);font-weight:600}
+.ghost-row .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.keybox{grid-column:1/-1;font:.68rem var(--font-mono);background:var(--ink-0);border:1px dashed var(--accent);border-radius:8px;padding:8px;overflow-wrap:anywhere}
 .soon{font:500 .58rem var(--font-mono);letter-spacing:.12em;color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 .quote{display:grid;gap:5px;padding:10px 12px;background:var(--ink-2);border-radius:12px;min-height:40px}
 .quote[hidden]{display:none}
@@ -198,10 +214,18 @@ tr.pick:hover td{background:var(--ink-2)}
       <div class="tablist" role="tablist" aria-label="Account">
         <button role="tab" id="tab-pos" aria-controls="p-pos" aria-selected="true">Positions</button>
         <button role="tab" id="tab-act" aria-controls="p-act" aria-selected="false">Activity</button>
+        <button role="tab" id="tab-ghost" aria-controls="p-ghost" aria-selected="false">Ghost</button>
         <button role="tab" id="tab-exp" aria-controls="p-exp" aria-selected="false">Exposure</button>
       </div>
       <div class="tabpanel" role="tabpanel" id="p-pos" aria-labelledby="tab-pos"><p class="muted">Connect a wallet to see what you hold.</p></div>
       <div class="tabpanel" role="tabpanel" id="p-act" aria-labelledby="tab-act" hidden><p class="muted">Trades you make here show up in this list.</p></div>
+      <div class="tabpanel" role="tabpanel" id="p-ghost" aria-labelledby="tab-ghost" hidden>
+        <div class="expo-head">
+          <span class="muted" id="g-head">Ghost wallets are rebuilt from one signature of your wallet. Unlock them to see balances, sell and exit.</span>
+          <button class="btn quiet" id="g-unlock" type="button">Unlock ghost wallets</button>
+        </div>
+        <div class="ghost-list" id="g-list"></div>
+      </div>
       <div class="tabpanel" role="tabpanel" id="p-exp" aria-labelledby="tab-exp" hidden>
         <div class="expo-head">
           <span class="score" id="x-score">—</span>
@@ -225,10 +249,15 @@ tr.pick:hover td{background:var(--ink-2)}
       <div class="quick" id="quick"></div>
     </div>
     <div class="row"><span class="k">Slippage</span><div class="slip" id="slip"></div></div>
-    <div class="ghost-toggle">
-      <div><b>Ghost mode<span class="soon">SOON</span></b><span>Trade from a fresh, unlinked wallet</span></div>
-      <button class="switch" type="button" role="switch" aria-checked="false" aria-label="Ghost mode, coming soon" disabled></button>
+    <div class="ghost-toggle" id="ghost-box">
+      <div><b>Ghost mode<span class="soon">BETA</span></b><span id="ghost-sub">Buy from a fresh wallet, routed through NEAR Intents</span></div>
+      <button class="switch" id="ghost-switch" type="button" role="switch" aria-checked="false" aria-label="Ghost mode"></button>
     </div>
+    <ol class="gsteps" id="gsteps" hidden>
+      <li>Fund the route from your wallet</li>
+      <li>NEAR Intents pays a fresh ghost wallet</li>
+      <li>Ghost wallet buys</li>
+    </ol>
     <div class="quote" id="quote" hidden></div>
     <button class="btn primary go" id="go" type="button">Connect wallet</button>
     <p class="status" id="status" aria-live="polite"></p>
@@ -238,9 +267,10 @@ tr.pick:hover td{background:var(--ink-2)}
 
 <script src="./vendor/solana-web3.min.js"></script>
 <script type="module">
-import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS } from "./config.js";
+import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE } from "./config.js";
+import { GHOST_MESSAGE, GhostError, deriveGhost, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError } from "./swap.js";
-import { trace, DEFAULT_RPC, short, isAddress } from "./trace.js";
+import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
 
 const web3 = window.solanaWeb3;
 const $ = id => document.getElementById(id);
@@ -292,7 +322,7 @@ const text = (el, s) => { el.textContent = s; return el; };
 const make = (tag, cls, s) => { const e = document.createElement(tag); if (cls) e.className = cls; if (s !== undefined) e.textContent = s; return e; };
 
 /* ---------- state ---------- */
-const S = { token: null, side: "buy", slippage: DEFAULT_SLIPPAGE_BPS, wallet: null, sol: null, tokenBal: null, solUsd: null, busy: false, quoteTimer: 0, quoteSeq: 0 };
+const S = { token: null, side: "buy", slippage: DEFAULT_SLIPPAGE_BPS, wallet: null, sol: null, tokenBal: null, solUsd: null, busy: false, quoteTimer: 0, quoteSeq: 0, ghost: false, seed: null };
 
 /* ---------- token search ---------- */
 const q = $("q"), results = $("results");
@@ -412,7 +442,7 @@ async function connect(w) {
 async function disconnect() {
   menu.hidden = true;
   try { await S.wallet?.p.disconnect?.(); } catch (_) {}
-  S.wallet = null; S.sol = S.tokenBal = null;
+  S.wallet = null; S.sol = S.tokenBal = null; S.seed = null; renderGhosts();
   text($("connect"), "Connect wallet"); $("connect").className = "btn primary";
   $("p-pos").textContent = ""; $("p-pos").append(make("p", "muted", "Connect a wallet to see what you hold."));
   renderSide();
@@ -525,6 +555,9 @@ function problem() {
   if (S.token.decimals == null) return "Loading token…";
   const raw = amountRaw();
   if (!raw) return "Enter an amount";
+  if (S.ghost && S.side === "sell") return "Sell ghost buys from the Ghost tab";
+  if (S.ghost && raw > toRaw(String(GHOST_MAX_SOL), 9)) return `Ghost beta limit is ${GHOST_MAX_SOL} SOL`;
+  if (S.ghost && raw <= GHOST_GAS_RESERVE * 2n) return "Ghost buys start at 0.02 SOL";
   if (!S.wallet) return null;
   if (S.side === "buy" && S.sol != null && raw + RESERVE > S.sol) return "Not enough SOL";
   if (S.side === "sell" && S.tokenBal != null && raw > S.tokenBal) return `Not enough ${S.token.symbol}`;
@@ -534,9 +567,11 @@ function updateGo() {
   if (S.busy) return;
   const p = problem();
   go.disabled = !!p && !!S.wallet;
-  text(go, !S.wallet ? "Connect wallet" : p || `${S.side === "buy" ? "Buy" : "Sell"} ${S.token.symbol}`);
+  text(go, !S.wallet ? "Connect wallet" : p || `${S.ghost ? "Ghost buy" : S.side === "buy" ? "Buy" : "Sell"} ${S.token.symbol}`);
   go.className = "btn go " + (!S.wallet || !p ? "primary" : "quiet");
-  text($("fine"), `${FEE_BPS/100}% fee in SOL per trade · routed by Jupiter · you sign every transaction in your own wallet`);
+  text($("fine"), S.ghost
+    ? `Ghost: ${FEE_BPS/100}% fee from your wallet, NEAR Intents routing fee, then the ghost buys through Jupiter. Funding and exit amounts and timing can still be matched, so vary them and don't exit right away.`
+    : `${FEE_BPS/100}% fee in SOL per trade · routed by Jupiter · you sign every transaction in your own wallet`);
 }
 
 // A preview quote while typing. The real one is fetched again when you press the button.
@@ -550,8 +585,10 @@ async function previewQuote() {
   const seq = ++S.quoteSeq, raw = amountRaw();
   if (!raw || S.token.decimals == null) return;
   const buy = S.side === "buy", fee = buy ? (raw * BigInt(FEE_BPS)) / 10000n : null;
+  const spend = buy ? raw - fee - (S.ghost ? GHOST_GAS_RESERVE : 0n) : raw;
+  if (spend <= 0n) return;
   try {
-    const qt = await jup.quote({ inputMint: buy ? SOL_MINT : S.token.id, outputMint: buy ? S.token.id : SOL_MINT, amount: buy ? raw - fee : raw, slippageBps: S.slippage });
+    const qt = await jup.quote({ inputMint: buy ? SOL_MINT : S.token.id, outputMint: buy ? S.token.id : SOL_MINT, amount: spend, slippageBps: S.slippage });
     if (seq !== S.quoteSeq) return;
     renderQuote(qt, buy ? fee : (BigInt(qt.otherAmountThreshold) * BigInt(FEE_BPS)) / 10000n);
   } catch (err) { if (seq === S.quoteSeq) { quoteBox.hidden = false; quoteBox.textContent = ""; quoteBox.append(make("div", "row", err.message)); } }
@@ -564,7 +601,8 @@ function renderQuote(qt, fee) {
     ["Minimum", `${fromRaw(qt.otherAmountThreshold, outDec, 4)} ${outSym}`],
     ["Price impact", `${(Number(qt.priceImpactPct || 0)*100).toFixed(2)}%`],
     ["Route", [...new Set(route)].slice(0, 3).join(" → ") || "—"],
-    [`Fee ${FEE_BPS/100}%`, `${fromRaw(fee, 9, 6)} SOL`]
+    [`Fee ${FEE_BPS/100}%`, `${fromRaw(fee, 9, 6)} SOL`],
+    ...(S.ghost && buy ? [["Ghost route", "NEAR Intents → fresh wallet, + 0.01 SOL kept for gas"]] : [])
   ];
   quoteBox.textContent = "";
   for (const [k, v] of rows) { const r = make("div", "row"); r.append(make("span", "k", k), make("span", "", v)); quoteBox.append(r); }
@@ -579,6 +617,7 @@ function setStatus(msg, cls = "", link) {
 go.addEventListener("click", async () => {
   if (!S.wallet) return $("connect").click();
   if (S.busy || problem()) return;
+  if (S.ghost && S.side === "buy") return ghostBuy();
   const buy = S.side === "buy", raw = amountRaw(), sym = S.token.symbol;
   S.busy = true; go.disabled = true; text(go, "Preparing…"); setStatus("Getting the best route from Jupiter…");
   try {
@@ -597,6 +636,171 @@ go.addEventListener("click", async () => {
     const rejected = e && (e.code === 4001 || /reject|cancel|denied/i.test(e.message || ""));
     setStatus(rejected ? "Cancelled in wallet. Nothing was sent." : e instanceof SwapError ? e.message : `Something went wrong: ${(e && e.message || e).toString().slice(0, 140)}`, "err");
   } finally { S.busy = false; updateGo(); }
+});
+
+/* ---------- ghost mode ---------- */
+const oc = oneclick({ jwt: ONECLICK_JWT });
+let solAsset = null;
+const GKEY = pk => `ghostprint-ghosts-${pk}`, FKEY = pk => `ghostprint-ghostfp-${pk}`;
+const ghostRecords = () => { try { return JSON.parse(store.get(GKEY(S.wallet.pk)) || "[]"); } catch (_) { return []; } };
+function saveGhost(rec) { const list = ghostRecords().filter(g => g.index !== rec.index); list.push(rec); list.sort((a, b) => a.index - b.index); store.set(GKEY(S.wallet.pk), JSON.stringify(list)); }
+const ROUTE_LABEL = { PENDING_DEPOSIT: "waiting for the deposit", KNOWN_DEPOSIT_TX: "deposit seen", INCOMPLETE_DEPOSIT: "deposit incomplete", PROCESSING: "routing privately", SUCCESS: "delivered" };
+
+$("ghost-switch").addEventListener("click", () => {
+  S.ghost = !S.ghost;
+  $("ghost-switch").setAttribute("aria-checked", S.ghost);
+  $("ghost-box").classList.toggle("on", S.ghost);
+  if (S.ghost && S.side === "sell") { S.side = "buy"; amt.value = ""; }
+  renderSide(); scheduleQuote();
+});
+
+// One signature of a fixed message rebuilds every ghost wallet. It stays in memory for this tab only.
+async function ghostSeed() {
+  if (S.seed) return S.seed;
+  if (!S.wallet.p.signMessage) throw new GhostError(`${S.wallet.name} can't sign messages, which Ghost mode needs. Try Phantom, Solflare or Backpack.`);
+  const r = await S.wallet.p.signMessage(new TextEncoder().encode(GHOST_MESSAGE), "utf8");
+  const sig = r instanceof Uint8Array ? r : r.signature;
+  if (!sig || sig.length !== 64) throw new GhostError("The wallet returned an unexpected signature.");
+  const fp = await seedFingerprint(sig), known = store.get(FKEY(S.wallet.pk));
+  if (known && known !== fp) throw new GhostError("This wallet signed differently than last time, so it would open different ghost wallets. Use the same wallet app as before, or export ghost keys from the device you used.");
+  store.set(FKEY(S.wallet.pk), fp);
+  return (S.seed = sig);
+}
+function steps(n) { [...$("gsteps").children].forEach((li, i) => { li.className = i < n ? "done" : i === n ? "active" : ""; }); $("gsteps").hidden = n < 0; }
+async function waitForSol(pk, min = 1n, ms = 90000) {
+  const until = Date.now() + ms;
+  for (;;) {
+    const b = BigInt(await connection.getBalance(new web3.PublicKey(pk)));
+    if (b >= min) return b;
+    if (Date.now() > until) throw new GhostError("NEAR Intents reported delivery but the ghost wallet hasn't received SOL yet. Check the Ghost tab in a minute.");
+    await new Promise(r => setTimeout(r, 2500));
+  }
+}
+async function signAndSend(tx, signer) {
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+  tx.message.recentBlockhash = blockhash;
+  const signed = signer ? (tx.sign([signer]), tx) : await S.wallet.p.signTransaction(tx);
+  return sendAndConfirm(connection, signed, lastValidBlockHeight);
+}
+
+async function ghostBuy() {
+  const raw = amountRaw(), sym = S.token.symbol, mint = S.token.id, decimals = S.token.decimals, main = S.wallet.pk;
+  S.busy = true; go.disabled = true;
+  let rec = null;
+  try {
+    text(go, "Sign in wallet…"); setStatus("Sign the Ghost message so the terminal can open a fresh ghost wallet. It sends nothing.");
+    const seed = await ghostSeed();
+    const index = ghostRecords().reduce((m, g) => Math.max(m, g.index + 1), 0);
+    const ghost = await deriveGhost(web3, seed, index), gpk = ghost.publicKey.toBase58();
+    const fee = (raw * BigInt(FEE_BPS)) / 10000n, routeAmount = raw - fee;
+    steps(0); text(go, "Routing…"); setStatus("Getting a private route from NEAR Intents…");
+    solAsset = solAsset || await oc.tokens().then(solAssetId).catch(() => undefined);
+    const { quote, confidential } = await routeQuote({ oc, asset: solAsset, amount: routeAmount, from: main, to: gpk, confidentiality: GHOST_CONFIDENTIALITY });
+    rec = { index, address: gpk, mint, symbol: sym, decimals, state: "funding", depositAddress: quote.depositAddress, confidential, createdAt: Date.now() };
+    saveGhost(rec);
+    text(go, "Approve in wallet…"); setStatus(`Approve sending ${fromRaw(raw, 9, 4)} SOL into ${confidential ? "a Confidential Intents" : "a NEAR Intents"} route.`);
+    const { blockhash } = await connection.getLatestBlockhash("confirmed");
+    const fsig = await signAndSend(fundingTx(web3, { from: main, depositAddress: quote.depositAddress, amount: routeAmount, fee, treasury: TREASURY, blockhash }));
+    oc.submitDeposit(fsig, quote.depositAddress).catch(() => {});
+    saveGhost({ ...rec, state: "routing", fundingSig: fsig });
+    steps(1); text(go, "Routing privately…");
+    await waitForRoute(oc, quote.depositAddress, { onStatus: s => setStatus(`NEAR Intents: ${ROUTE_LABEL[s] || s.toLowerCase()}${confidential ? " (confidential)" : ""}…`) });
+    const bal = await waitForSol(gpk, GHOST_GAS_RESERVE + 1n);
+    saveGhost({ ...rec, state: "funded" });
+    steps(2); text(go, "Ghost buying…"); setStatus(`Ghost wallet #${index} received ${fromRaw(bal, 9, 4)} SOL. Buying ${sym}…`);
+    const prep = await prepareSwap({ web3, jup, connection, side: "buy", mint, amountRaw: bal - GHOST_GAS_RESERVE, user: gpk, treasury: TREASURY, feeBps: 0, slippageBps: S.slippage, priorityMaxLamports: PRIORITY_MAX_LAMPORTS });
+    prep.tx.sign([ghost]);
+    const bsig = await sendAndConfirm(connection, prep.tx, prep.lastValidBlockHeight);
+    saveGhost({ ...rec, state: "holding", buySig: bsig });
+    steps(3);
+    setStatus(`Ghost wallet #${index} bought ≈${fromRaw(prep.quote.outAmount, decimals, 4)} ${sym}. Nothing on-chain links it to your wallet.`, "ok", bsig);
+    logActivity({ sig: bsig, side: "buy", sym, mint, amount: fromRaw(raw, 9, 4), out: `${fromRaw(prep.quote.outAmount, decimals, 4)} (ghost #${index})`, time: Date.now() });
+    amt.value = ""; quoteBox.hidden = true;
+    refreshBalances(); renderGhosts();
+  } catch (e) {
+    const rejected = e && (e.code === 4001 || /reject|cancel|denied/i.test(e.message || ""));
+    setStatus(rejected ? "Cancelled in wallet. Nothing was sent." : (e && e.message) || "Ghost buy failed.", "err");
+    if (rec) setStatus(`${$("status").textContent} Ghost wallet #${rec.index} is in the Ghost tab if it received anything.`, "err");
+  } finally { S.busy = false; setTimeout(() => steps(-1), 8000); updateGo(); }
+}
+
+// Sell everything a ghost holds, then route all of its SOL back to the main wallet through NEAR Intents.
+async function ghostExit(index, row) {
+  if (S.busy) return;
+  S.busy = true;
+  const say = (m, cls = "") => { text(row.querySelector(".meta"), m); setStatus(m, cls); };
+  try {
+    const ghost = await deriveGhost(web3, await ghostSeed(), index), gpk = ghost.publicKey.toBase58(), owner = ghost.publicKey;
+    const accounts = async () => (await Promise.all(["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].map(p =>
+      connection.getParsedTokenAccountsByOwner(owner, { programId: new web3.PublicKey(p) }).then(r => r.value.map(a => ({ address: a.pubkey.toBase58(), programId: p, lamports: a.account.lamports, mint: a.account.data.parsed.info.mint, raw: BigInt(a.account.data.parsed.info.tokenAmount.amount) }))).catch(() => [])))).flat();
+    for (const a of (await accounts()).filter(a => a.raw > 0n && a.mint !== SOL_MINT)) {
+      say(`Ghost #${index}: selling ${short(a.mint)}…`);
+      const prep = await prepareSwap({ web3, jup, connection, side: "sell", mint: a.mint, amountRaw: a.raw, user: gpk, treasury: TREASURY, feeBps: 0, slippageBps: Math.max(S.slippage, 500), priorityMaxLamports: PRIORITY_MAX_LAMPORTS });
+      prep.tx.sign([ghost]);
+      await sendAndConfirm(connection, prep.tx, prep.lastValidBlockHeight);
+    }
+    const left = await accounts();
+    const stuck = left.filter(a => a.raw > 0n);
+    const close = left.filter(a => a.raw === 0n);
+    const amount = exitAmount(await connection.getBalance(owner), close);
+    if (amount <= 0n) throw new GhostError(`Ghost #${index} has nothing left to send.`);
+    say(`Ghost #${index}: getting a private route home…`);
+    solAsset = solAsset || await oc.tokens().then(solAssetId).catch(() => undefined);
+    const { quote, confidential } = await routeQuote({ oc, asset: solAsset, amount, from: gpk, to: S.wallet.pk, confidentiality: GHOST_CONFIDENTIALITY });
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
+    const tx = exitTx(web3, { ghost, depositAddress: quote.depositAddress, amount, closeAccounts: close, blockhash });
+    const sig = await sendAndConfirm(connection, tx, lastValidBlockHeight);
+    oc.submitDeposit(sig, quote.depositAddress).catch(() => {});
+    const rec = ghostRecords().find(g => g.index === index) || { index, address: gpk };
+    saveGhost({ ...rec, state: "exiting", exitDeposit: quote.depositAddress });
+    await waitForRoute(oc, quote.depositAddress, { onStatus: s => say(`Ghost #${index} → your wallet: ${ROUTE_LABEL[s] || s.toLowerCase()}${confidential ? " (confidential)" : ""}…`) });
+    saveGhost({ ...rec, state: stuck.length ? "partial" : "closed" });
+    setStatus(`Ghost #${index} is back in your wallet: ${fromRaw(BigInt(quote.amountOut), 9, 4)} SOL${stuck.length ? `. ${stuck.length} token(s) had no route and stayed in the ghost wallet` : ""}.`, "ok", sig);
+    refreshBalances();
+  } catch (e) {
+    setStatus(e && e.code === 4001 ? "Cancelled in wallet." : (e && e.message) || "Exit failed.", "err");
+  } finally { S.busy = false; renderGhosts(); }
+}
+
+// The Ghost tab: scan recorded ghosts plus a few indices beyond, so a new device finds them too.
+async function renderGhosts(extra = 3) {
+  const list = $("g-list");
+  list.textContent = "";
+  if (!S.wallet) { text($("g-head"), "Connect a wallet to see its ghost wallets."); return; }
+  if (!S.seed) return;
+  text($("g-unlock"), "Scan further");
+  text($("g-head"), "Scanning ghost wallets…");
+  const recs = ghostRecords(), top = recs.reduce((m, g) => Math.max(m, g.index), -1) + extra;
+  const rows = [];
+  for (let i = 0; i <= top; i++) {
+    const ghost = await deriveGhost(web3, S.seed, i), pk = ghost.publicKey;
+    const [bal, toks] = await Promise.all([connection.getBalance(pk).catch(() => 0), connection.getParsedTokenAccountsByOwner(pk, { programId: new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }).then(r => r.value).catch(() => [])]);
+    const held = toks.map(a => a.account.data.parsed.info).filter(t => BigInt(t.tokenAmount.amount) > 0n);
+    const rec = recs.find(g => g.index === i);
+    if (!bal && !held.length && !(rec && rec.state !== "closed")) continue;
+    rows.push({ i, ghost, bal: BigInt(bal), held, rec });
+  }
+  text($("g-head"), rows.length ? `${rows.length} ghost wallet${rows.length === 1 ? "" : "s"} with funds or in progress.` : "No ghost wallets with funds. Turn on Ghost mode in the trade panel to make one.");
+  for (const r of rows) {
+    const row = make("div", "ghost-row"), meta = make("div", "meta"), acts = make("div", "acts");
+    meta.append(make("b", "", `Ghost #${r.i}`), ` · ${short(r.ghost.publicKey.toBase58())} · ${fromRaw(r.bal, 9, 4)} SOL`);
+    for (const t of r.held) meta.append(` · ${Number(t.tokenAmount.uiAmountString || t.tokenAmount.uiAmount).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${r.rec && r.rec.mint === t.mint ? r.rec.symbol : short(t.mint)}`);
+    if (r.rec) meta.append(` · ${r.rec.state}`);
+    const exit = make("button", "btn primary", r.held.length ? "Sell all & exit" : "Exit to wallet"); exit.type = "button";
+    exit.onclick = () => ghostExit(r.i, row);
+    const key = make("button", "btn quiet", "Export key"); key.type = "button";
+    key.onclick = () => {
+      const old = row.querySelector(".keybox"); if (old) return old.remove();
+      const box = make("div", "keybox", `Secret key for ghost #${r.i} (import into Phantom or Solflare): ${base58Encode(r.ghost.secretKey)}`);
+      row.append(box);
+    };
+    acts.append(exit, key); row.append(meta, acts); list.append(row);
+  }
+}
+$("g-unlock").addEventListener("click", async () => {
+  if (!S.wallet) return $("connect").click();
+  try { await ghostSeed(); text($("g-unlock"), "Scan further"); await renderGhosts(S.scanned = (S.scanned || 3) + (S.seed ? 7 : 0)); }
+  catch (e) { text($("g-head"), e && e.code === 4001 ? "Cancelled in wallet." : e.message); }
 });
 
 /* ---------- activity ---------- */
