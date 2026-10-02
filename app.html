@@ -221,6 +221,30 @@ tr.newrow td{animation:rowflash 1s ease-out}
 .gsteps li.active{color:var(--paper)}.gsteps li.done{color:var(--up)}
 .fine{margin:0;font:.62rem var(--font-mono);color:var(--mute);line-height:1.5}
 
+/* orders */
+.orders .opanel{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.orders .two-seg{display:grid;grid-template-columns:1fr 1fr;width:100%}
+.orders .olab{font:.66rem var(--font-mono);color:var(--mute-ink);display:flex;justify-content:space-between;gap:6px}
+.amount.sm input{font-size:1rem;padding:6px 0}
+.orders select.inp{padding:4px 8px;font-size:.7rem}
+.arow{display:flex;align-items:center;gap:5px;font:.7rem var(--font-mono);color:var(--mute-ink)}
+.arow span:first-child{min-width:3.6em}
+.arow .inp{width:46px;padding:4px 6px;font-size:.72rem}
+.arow .btn{margin-left:auto}
+.olist{display:grid;gap:4px}
+.orow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--ink-2);border-radius:8px;padding:7px 9px;font:.7rem var(--font-mono)}
+.orow .muted{font-size:.64rem}
+.pcard .snipe{font:600 .7rem var(--font-mono);border-radius:8px;border:1px solid var(--ink-3);background:var(--ink-1);color:var(--mute-ink);padding:6px 7px;cursor:pointer;margin-right:4px}
+.pcard .snipe[aria-pressed="true"]{border-color:var(--warn);color:var(--warn)}
+.pc-acts{display:flex;align-items:center}
+.post{display:grid;grid-template-columns:32px minmax(0,1fr);gap:10px;padding:10px 14px;border-bottom:1px solid var(--ink-2);font-size:.8rem}
+.post img{width:32px;height:32px;border-radius:50%;background:var(--ink-3)}
+.post .who{font:.7rem var(--font-mono);color:var(--mute-ink)}
+.post .who b{color:var(--paper)}
+.post p{margin:3px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+#autochip{cursor:pointer;background:none;color:var(--paper)}
+#autochip.paused{border-color:var(--warn);color:var(--warn)}
+
 /* tracker / portfolio */
 .two{display:grid;grid-template-columns:320px minmax(0,1fr);gap:10px;align-items:start}
 @media (max-width:900px){.two{grid-template-columns:minmax(0,1fr)}}
@@ -251,7 +275,8 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .box{background:var(--ink-2);border-radius:10px;padding:12px;display:grid;gap:8px}
 .box .row{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;font:.74rem var(--font-mono)}
 .box p{margin:0;font:.68rem var(--font-mono);color:var(--mute-ink);line-height:1.5}
-.toasts{position:fixed;right:14px;bottom:14px;display:grid;gap:8px;z-index:60;max-width:min(380px,calc(100vw - 28px))}
+.toasts{position:fixed;right:14px;bottom:14px;display:grid;gap:8px;z-index:60;max-width:min(380px,calc(100vw - 28px));pointer-events:none}
+.toasts a{pointer-events:auto}
 .toast{background:var(--ink-2);border:1px solid var(--ink-3);border-left:3px solid var(--mute-ink);border-radius:10px;padding:10px 12px;font:.74rem var(--font-mono);box-shadow:0 16px 32px -16px #000;overflow-wrap:anywhere}
 .toast.ok{border-left-color:var(--up)}.toast.err{border-left-color:var(--accent)}.toast.info{border-left-color:var(--warn)}
 .toast a{color:var(--mute-ink)}
@@ -275,6 +300,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
     <ul class="results" id="results" role="listbox" hidden></ul>
   </div>
   <div class="right">
+    <button class="chip" id="autochip" type="button" hidden></button>
     <span class="chip solchip" id="solprice" title="SOL price">SOL —</span>
     <label class="qb-amt" title="Quick-buy amount for ⚡ buttons"><span>⚡</span><input id="qbamt" inputmode="decimal" aria-label="Quick-buy amount in SOL"><span>SOL</span></label>
     <button class="btn" id="walletbtn" type="button">Connect</button>
@@ -346,10 +372,12 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
           <button role="tab" type="button" aria-selected="true" aria-controls="tp-trades" id="tt-trades">Trades</button>
           <button role="tab" type="button" aria-selected="false" aria-controls="tp-holders" id="tt-holders">Holders</button>
           <button role="tab" type="button" aria-selected="false" aria-controls="tp-mine" id="tt-mine">My trades</button>
+          <button role="tab" type="button" aria-selected="false" aria-controls="tp-posts" id="tt-posts">Posts</button>
         </div>
         <div class="tabpanel" role="tabpanel" id="tp-trades" aria-labelledby="tt-trades"></div>
         <div class="tabpanel" role="tabpanel" id="tp-holders" aria-labelledby="tt-holders" hidden></div>
         <div class="tabpanel" role="tabpanel" id="tp-mine" aria-labelledby="tt-mine" hidden></div>
+        <div class="tabpanel" role="tabpanel" id="tp-posts" aria-labelledby="tt-posts" hidden></div>
       </div>
     </div>
     <aside class="tok-side">
@@ -369,6 +397,31 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
         <button class="btn primary go" id="go" type="button">Connect wallet</button>
         <p class="status" id="status" aria-live="polite"></p>
         <p class="fine" id="fine"></p>
+      </div>
+      <div class="panel orders" id="orders">
+        <div class="tablist" role="tablist" aria-label="Orders">
+          <button role="tab" type="button" aria-selected="true" aria-controls="op-limit" id="ot-limit">Limit</button>
+          <button role="tab" type="button" aria-selected="false" aria-controls="op-auto" id="ot-auto">Auto TP/SL</button>
+        </div>
+        <div role="tabpanel" id="op-limit" aria-labelledby="ot-limit" class="opanel">
+          <div class="seg two-seg" id="lo-side" role="group" aria-label="Limit side"><button type="button" data-v="buy" aria-pressed="true">Buy below</button><button type="button" data-v="sell" aria-pressed="false">Sell above</button></div>
+          <label class="olab" for="lo-price">Target price (USD) <span id="lo-mc" class="muted"></span></label>
+          <div class="amount sm"><input id="lo-price" inputmode="decimal" placeholder="0.00" autocomplete="off"><span class="unit">USD</span></div>
+          <div class="quick" id="lo-steps"></div>
+          <label class="olab" for="lo-amt" id="lo-amt-label">Spend (SOL)</label>
+          <div class="amount sm"><input id="lo-amt" inputmode="decimal" placeholder="0.0" autocomplete="off"><span class="unit" id="lo-unit">SOL</span></div>
+          <div class="from"><span>Expires</span><select class="inp" id="lo-exp" aria-label="Expiry"><option value="0">Never</option><option value="3600">1 hour</option><option value="86400" selected>24 hours</option><option value="604800">7 days</option></select></div>
+          <button class="btn primary" id="lo-go" type="button">Place limit order</button>
+          <p class="fine">Placed on-chain through Jupiter and filled by its keepers, even with this tab closed.</p>
+          <div class="olist" id="lo-list"></div>
+        </div>
+        <div role="tabpanel" id="op-auto" aria-labelledby="ot-auto" class="opanel" hidden>
+          <div class="arow"><span title="Take profit">TP +</span><input class="inp" id="ap-tp" inputmode="decimal" value="100" aria-label="Take profit percent"><span>% sell</span><input class="inp" id="ap-tp-sell" inputmode="numeric" value="50" aria-label="Take profit sell percent"><span>%</span><button class="btn small" type="button" data-add="tp">Add</button></div>
+          <div class="arow"><span title="Stop loss">SL −</span><input class="inp" id="ap-sl" inputmode="decimal" value="30" aria-label="Stop loss percent"><span>% sell</span><input class="inp" id="ap-sl-sell" inputmode="numeric" value="100" aria-label="Stop loss sell percent"><span>%</span><button class="btn small" type="button" data-add="sl">Add</button></div>
+          <div class="arow"><span title="Trailing stop: sells when price falls this far below its peak">Trail −</span><input class="inp" id="ap-tr" inputmode="decimal" value="20" aria-label="Trailing stop percent"><span>% sell</span><input class="inp" id="ap-tr-sell" inputmode="numeric" value="100" aria-label="Trailing stop sell percent"><span>%</span><button class="btn small" type="button" data-add="trail">Add</button></div>
+          <p class="fine">Autopilot sells from your ⚡ Instant wallet while this terminal is open. Entry is the current price when you add a rule.</p>
+          <div class="olist" id="ap-list"></div>
+        </div>
       </div>
       <div class="panel audit" id="audit"><h3>Token info</h3><span class="muted">Loading…</span></div>
     </aside>
@@ -396,6 +449,10 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div class="tscroll"><table id="pf-table"></table></div>
     </div>
     <div class="panel" style="margin-bottom:10px">
+      <div class="phead"><h2>Orders</h2><span class="grow"></span><span class="muted mono" style="font-size:.66rem">Limit orders live on-chain · autopilot and snipes run while the terminal is open</span></div>
+      <div class="tscroll"><table id="pf-orders"></table></div>
+    </div>
+    <div class="panel" style="margin-bottom:10px">
       <div class="phead"><h2>Ghost wallets</h2><span class="grow"></span><button class="btn small" id="g-unlock" type="button">Unlock ghost wallets</button></div>
       <div style="padding:10px;display:grid;gap:8px" id="g-list"><span class="muted mono" style="font-size:.72rem">Ghost wallets are rebuilt from one signature of your wallet. Unlock to see them.</span></div>
     </div>
@@ -404,7 +461,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <ul class="wl" id="x-list"></ul>
     </div>
     <div class="panel">
-      <div class="phead"><h2>Activity</h2></div>
+      <div class="phead"><h2>Activity</h2><span class="grow"></span><span class="muted mono" id="imp-note" style="font-size:.66rem"></span><button class="btn small" id="imp-go" type="button">Import on-chain history</button></div>
       <div class="tscroll"><table id="pf-act"></table></div>
     </div>
   </section>

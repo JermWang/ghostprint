@@ -60,3 +60,10 @@ test("PnL: average cost, realized and unrealized", () => {
   assert.equal(a.value, 4); assert.equal(a.unrealized, 2); assert.equal(a.total, 3); assert.equal(a.pct, 75);
   assert.equal(pnl([{ mint: "B", side: "buy", sol: 1, tokens: 10 }])[0].unrealized, null);
 });
+
+test("on-chain history merges into the trade log without duplicates", async () => {
+  const { mergeHistory } = await import("../market.js");
+  const log = [{ sig: "a", mint: "M", time: 5000, side: "buy", sol: 1, tokens: 10 }];
+  const merged = mergeHistory(log, [{ sig: "a", mint: "M", time: 5, side: "buy", sol: 1, tokens: 10 }, { sig: "b", mint: "M", time: 9, side: "sell", sol: 2, tokens: 10 }], () => "SYM");
+  assert.equal(merged.length, 2); assert.equal(merged[0].sig, "b"); assert.equal(merged[0].time, 9000); assert.equal(merged[0].from, "chain"); assert.equal(merged[0].symbol, "SYM");
+});

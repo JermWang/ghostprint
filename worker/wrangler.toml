@@ -1,0 +1,14 @@
+name = "ghostprint-proxy"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[vars]
+# Sites allowed to use this proxy (comma-separated). Empty means any origin.
+ALLOWED_ORIGINS = "https://jermwang.github.io,http://localhost:5178"
+
+# Secrets (set with `npx wrangler secret put NAME`, never committed):
+#   RPC_URL       e.g. https://mainnet.helius-rpc.com/?api-key=...
+#   RPC_WS_URL    optional, e.g. wss://mainnet.helius-rpc.com/?api-key=...
+#   JUP_API_KEY   from portal.jup.ag
+#   ONECLICK_JWT  from the NEAR Intents partner dashboard
+#   X_BEARER      X API bearer token (pay-per-use reads)

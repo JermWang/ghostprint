@@ -1,12 +1,13 @@
 // Ghostprint terminal. Views: Pulse, Trending, token page, Tracker, Portfolio. All data comes from public
 // sources in the browser (PumpPortal, Jupiter, DexScreener, your Solana RPC, NEAR Intents); every trade is
 // signed by your wallet, or locally by your instant/ghost wallets which are derived from one signature of it.
-import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE } from "./config.js";
-import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError } from "./swap.js";
+import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE, PROXY_URL } from "./config.js";
+import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError, JITO_URL, JITO_MIN_TIP } from "./swap.js";
+import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, newRule, ruleTarget } from "./orders.js";
 import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
-import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint } from "./market.js";
-import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps } from "./feeds.js";
+import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint, mergeHistory } from "./market.js";
+import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory } from "./feeds.js";
 
 const web3 = window.solanaWeb3;
 const $ = id => document.getElementById(id);
@@ -54,21 +55,25 @@ function toast(msg, kind = "", sig) {
 const DEFAULTS = {
   quickBuy: "0.1", buyAmounts: ["0.1", "0.5", "1", "2"], sellPcts: [10, 25, 50, 100],
   presets: [
-    { slippageBps: DEFAULT_SLIPPAGE_BPS, priority: "high", maxSol: PRIORITY_MAX_LAMPORTS / 1e9 },
-    { slippageBps: 1000, priority: "veryHigh", maxSol: 0.003 },
-    { slippageBps: 2000, priority: "veryHigh", maxSol: 0.01 }
+    { slippageBps: DEFAULT_SLIPPAGE_BPS, priority: "high", maxSol: PRIORITY_MAX_LAMPORTS / 1e9, tipSol: 0, mev: false },
+    { slippageBps: 1000, priority: "veryHigh", maxSol: 0.003, tipSol: 0.0005, mev: false },
+    { slippageBps: 2000, priority: "veryHigh", maxSol: 0.01, tipSol: 0.001, mev: true }
   ],
-  preset: 0, from: "main", finalStretch: 60
+  preset: 0, from: "main", finalStretch: 60, autoTp: 0, autoSl: 0
 };
 const settings = Object.assign(structuredClone(DEFAULTS), store.get("ghostprint-settings", {}));
 const saveSettings = () => store.set("ghostprint-settings", settings);
 const preset = () => settings.presets[settings.preset] || DEFAULTS.presets[0];
 
 /* ---------- services ---------- */
-const rpcUrl = (() => { const v = store.get("ghostprint-rpc-url", null) || (() => { try { return localStorage.getItem("ghostprint-rpc"); } catch (_) { return null; } })(); return typeof v === "string" && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim() : DEFAULT_RPC; })();
+// With PROXY_URL set, RPC, Jupiter, NEAR Intents, Jito and X go through the Ghostprint proxy, which holds the keys.
+const PROXY = (PROXY_URL || "").replace(/\/$/, "");
+const rpcUrl = (() => { const v = store.get("ghostprint-rpc-url", null) || (() => { try { return localStorage.getItem("ghostprint-rpc"); } catch (_) { return null; } })(); return typeof v === "string" && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim() : PROXY ? `${PROXY}/rpc` : DEFAULT_RPC; })();
 const connection = new web3.Connection(rpcUrl, "confirmed");
-const jup = jupiter({ base: JUP_BASE, apiKey: JUP_API_KEY, minInterval: JUP_API_KEY ? 1050 : 2050 });
-const oc = oneclick({ jwt: ONECLICK_JWT });
+const jup = jupiter({ base: PROXY ? `${PROXY}/jup` : JUP_BASE, apiKey: PROXY ? "" : JUP_API_KEY, minInterval: PROXY ? 300 : JUP_API_KEY ? 1050 : 2050 });
+const oc = oneclick({ base: PROXY ? `${PROXY}/1click` : undefined, jwt: PROXY ? "" : ONECLICK_JWT });
+const jitoUrl = PROXY ? `${PROXY}/jito` : JITO_URL;
+const trig = triggerApi(jup);
 const S = { solUsd: null, wallet: null, seed: null, instant: null, sol: null, instantSol: null, busy: false, route: null };
 
 async function refreshSolPrice() {
@@ -182,7 +187,7 @@ async function instantWallet() {
   const kp = await deriveInstant(web3, await walletSeed());
   S.instant = { kp, pk: kp.publicKey.toBase58() };
   S.instantSol = BigInt(await connection.getBalance(kp.publicKey).catch(() => 0));
-  renderWalletBtn();
+  renderWalletBtn(); updateAutoChip();
   return S.instant;
 }
 async function signerFor(from) {
@@ -190,10 +195,11 @@ async function signerFor(from) {
   if (!S.wallet && !(await ensureConnected())) throw new SwapError("Connect a wallet first.");
   return { pk: S.wallet.pk, local: null, label: "main" };
 }
-async function signSend(tx, signer, lastValidBlockHeight, onStatus) {
+async function signSend(tx, signer, lastValidBlockHeight, onStatus, send = {}) {
   const signed = signer.local ? (tx.sign([signer.local]), tx) : await S.wallet.p.signTransaction(tx);
-  return sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus });
+  return sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus, ...send });
 }
+const signWith = signer => async tx => signer.local ? (tx.sign([signer.local]), tx) : S.wallet.p.signTransaction(tx);
 
 /* ---------- trades ---------- */
 const TKEY = pk => `ghostprint-trades-${pk}`;
@@ -208,9 +214,11 @@ async function executeTrade({ side, mint, amountRaw, from = settings.from, onSta
     if (bal != null && BigInt(amountRaw) + 5_000_000n > bal) throw new SwapError(from === "instant" ? "Not enough SOL in your instant wallet. Deposit from the wallet menu." : "Not enough SOL for this buy plus network fees.");
   }
   onStatus("Routing through Jupiter…");
-  const prep = await prepareSwap({ web3, jup, connection, side, mint, amountRaw, user: signer.pk, treasury: TREASURY, feeBps: FEE_BPS, slippageBps: p.slippageBps, priorityMaxLamports: Math.round(p.maxSol * 1e9), priorityLevel: p.priority });
+  const tip = BigInt(Math.round((p.tipSol || 0) * 1e9));
+  const prep = await prepareSwap({ web3, jup, connection, side, mint, amountRaw, user: signer.pk, treasury: TREASURY, feeBps: FEE_BPS, slippageBps: p.slippageBps, priorityMaxLamports: Math.round(p.maxSol * 1e9), priorityLevel: p.priority, tipLamports: tip });
   onStatus(signer.local ? "Sending…" : "Approve in your wallet…");
-  const sig = await signSend(prep.tx, signer, prep.lastValidBlockHeight, s => s.state === "sent" && onStatus("Sent. Confirming…"));
+  const jito = tip >= JITO_MIN_TIP ? jitoUrl : null;
+  const sig = await signSend(prep.tx, signer, prep.lastValidBlockHeight, s => s.state === "sent" && onStatus(`Sent${jito ? (p.mev ? " privately via Jito" : " via Jito + RPC") : ""}. Confirming…`), { jito, mevProtect: !!(jito && p.mev) });
   const dec = await decimalsOf(mint);
   const sol = side === "buy" ? Number(amountRaw) / 1e9 : (Number(prep.quote.outAmount) - Number(prep.fee)) / 1e9;
   const tokens = side === "buy" ? Number(prep.quote.outAmount) / 10 ** dec : Number(amountRaw) / 10 ** dec;
@@ -275,6 +283,7 @@ const pp = pumpPortal({
     metadata(m.uri).then(meta => { if (meta) { board.upsert({ mint: m.mint, ...meta }); pulseDirty = true; } });
   },
   onMigration: m => {
+    fireSnipe(m.mint);
     board.migrate(m.mint, Date.now(), { pool: m.pool });
     pulseDirty = true;
     const watched = watchlist().some(w => w.mint === m.mint) || tradedMints().has(m.mint);
@@ -286,10 +295,12 @@ function setStatusChip(el, s, label) {
 }
 
 async function curveLoop() {
-  const targets = board.curveTargets(100);
+  const armed = snipes().filter(x => x.status === "armed").map(x => x.mint);
+  const targets = [...new Set([...armed, ...board.curveTargets(100)])].slice(0, 100);
   if (targets.length) {
     try {
       const curves = await readCurves({ connection, web3, mints: targets });
+      for (const [mint, c] of curves) if (c.complete && armed.includes(mint)) fireSnipe(mint);
       for (const [mint, c] of curves) board.upsert({ mint, progress: c.progress, complete: c.complete || undefined, mcapSol: c.mcapSol, mcapUsd: S.solUsd ? c.mcapSol * S.solUsd : undefined, priceUsd: S.solUsd ? c.priceSol * S.solUsd : undefined });
       setStatusChip($("curve-status"), "live", `curves · ${curves.size}`);
       pulseDirty = true;
@@ -330,7 +341,10 @@ function buildCard(t) {
   main.append(top, meta, bar);
   const qb = make("button", "qb"); qb.type = "button";
   qb.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); quickBuy(t.mint, qb); });
-  a.append(img, main, qb);
+  const sn = make("button", "snipe", "🎯"); sn.type = "button";
+  sn.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleSnipe(t.mint); });
+  const acts = make("div", "pc-acts"); acts.append(sn, qb);
+  a.append(img, main, acts);
   if (t.fresh && !REDUCE) a.classList.add("fresh");
   return a;
 }
@@ -356,6 +370,9 @@ function updateCard(el, t) {
   bar.firstChild.style.width = `${Math.min(100, t.progress ?? 0)}%`;
   bar.title = t.progress != null ? `Bonding curve ${t.progress.toFixed(1)}%` : "";
   text(el.querySelector(".qb"), `⚡ ${$("qbamt").value || settings.quickBuy}`);
+  const sn = el.querySelector(".snipe"), armed = snipes().some(x => x.mint === t.mint && x.status === "armed");
+  sn.hidden = migrated; sn.setAttribute("aria-pressed", armed);
+  sn.title = armed ? "Sniping: buys from your instant wallet the moment this migrates. Click to cancel." : "Snipe the migration: buy from your instant wallet the moment this token migrates";
 }
 document.querySelectorAll(".pcol").forEach(col => {
   const key = col.dataset.col, f = filters[key] = filters[key] || {};
@@ -417,14 +434,14 @@ async function openToken(mint) {
   if (S.tokenMint === mint && S.route === "token" && T.sub) return;
   leaveToken();
   S.tokenMint = mint;
-  T.trades = []; T.tokenBal = null; T.decimals = null; T.info = null; T.curve = null;
+  T.trades = []; T.tokenBal = null; T.decimals = null; T.info = null; T.curve = null; T.priceUsd = null; T.holders = null;
   $("amt").value = ""; $("quote").hidden = true; setTradeStatus("");
   const b = board.tokens.get(mint) || {};
   text($("t-sym"), b.symbol || short(mint)); text($("t-name"), b.name || ""); text($("t-mint"), `${short(mint)} ⧉`); icon($("t-icon"), b.image);
   ["s-price", "s-mcap", "s-liq", "s-vol", "s-c5", "s-c1", "s-c24"].forEach(id => cls(text($(id), "—"), 0));
   $("chart").textContent = ""; $("chart").append(make("div", "empty", "Loading chart…"));
   $("curvebar").hidden = true;
-  renderStar(); renderTrades(); renderMine(); renderTradePanel(); selectTokenTab("tt-trades");
+  renderStar(); renderTrades(); renderMine(); renderTradePanel(); selectTokenTab("tt-trades"); renderOrdersPanel();
   $("audit").textContent = ""; $("audit").append(make("h3", "", "Token info"), make("span", "muted", "Loading…"));
   document.title = `${b.symbol || short(mint)} · Ghostprint`;
 
@@ -436,7 +453,7 @@ async function openToken(mint) {
   T.sub = tokenTrades({ rpcHttp: rpcUrl, connection, web3, mint, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
     if (S.tokenMint !== mint || T.trades.some(x => x.sig === tr.sig && x.side === tr.side && x.tokens === tr.tokens)) return;
     T.trades.unshift({ ...tr, fresh: true }); T.trades.length = Math.min(T.trades.length, 120);
-    if (tr.priceSol && S.solUsd) text($("s-price"), price(tr.priceSol * S.solUsd));
+    if (tr.priceSol && S.solUsd) { T.priceUsd = tr.priceSol * S.solUsd; text($("s-price"), price(T.priceUsd)); }
     renderTrades();
   } });
   T.statsTimer = setInterval(() => loadPairs(mint, true), 30000);
@@ -454,6 +471,7 @@ function renderTokenHead() {
   links.append(link(solscan("token", S.tokenMint), "Solscan"), " ", link(`https://dexscreener.com/solana/${S.tokenMint}`, "DEX"));
   if (isPumpMint(S.tokenMint, t?.launchpad)) links.append(" ", link(`https://pump.fun/coin/${S.tokenMint}`, "pump"));
   if (t) {
+    if (t.usdPrice) T.priceUsd = t.usdPrice;
     text($("s-price"), price(t.usdPrice)); text($("s-mcap"), usd(t.mcap ?? t.fdv)); text($("s-liq"), usd(t.liquidity));
     cls(text($("s-c5"), pct(t.stats5m?.priceChange)), t.stats5m?.priceChange); cls(text($("s-c1"), pct(t.stats1h?.priceChange)), t.stats1h?.priceChange); cls(text($("s-c24"), pct(t.stats24h?.priceChange)), t.stats24h?.priceChange);
     if (t.stats24h) text($("s-vol"), usd((t.stats24h.buyVolume || 0) + (t.stats24h.sellVolume || 0)));
@@ -466,6 +484,7 @@ async function loadPairs(mint, statsOnly) {
     if (S.tokenMint !== mint) return;
     const best = (Array.isArray(pairs) ? pairs : []).filter(p => p.chainId === "solana" && isAddress(p.pairAddress || "")).sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
     if (best) {
+      if (Number(best.priceUsd) > 0) T.priceUsd = Number(best.priceUsd);
       text($("s-price"), price(Number(best.priceUsd))); text($("s-mcap"), usd(best.marketCap ?? best.fdv)); text($("s-liq"), usd(best.liquidity?.usd)); text($("s-vol"), usd(best.volume?.h24));
       cls(text($("s-c5"), pct(best.priceChange?.m5)), best.priceChange?.m5); cls(text($("s-c1"), pct(best.priceChange?.h1)), best.priceChange?.h1); cls(text($("s-c24"), pct(best.priceChange?.h24)), best.priceChange?.h24);
     }
@@ -488,7 +507,7 @@ async function curveTick(mint) {
       $("curvebar").querySelector("i").style.width = `${c.progress}%`;
       $("curvebar").querySelector(".pbar").classList.toggle("hot", c.progress >= 80);
       text($("curvepct"), c.complete ? "Complete · migrating" : `${c.progress.toFixed(1)}% · ${solFmt(Number(c.realSolReserves) / 1e9)} SOL in curve`);
-      if (S.solUsd) { text($("s-mcap"), usd(c.mcapSol * S.solUsd)); text($("s-price"), price(c.priceSol * S.solUsd)); }
+      if (S.solUsd) { T.priceUsd = c.priceSol * S.solUsd; text($("s-mcap"), usd(c.mcapSol * S.solUsd)); text($("s-price"), price(T.priceUsd)); }
       renderAudit();
       if (c.complete) return;
     }
@@ -586,11 +605,16 @@ function renderAudit() {
   if (desc) a.append(make("p", "", desc));
 }
 function selectTokenTab(id) {
-  document.querySelectorAll("#v-token [role=tab]").forEach(t => { const on = t.id === id; t.setAttribute("aria-selected", on); $(t.getAttribute("aria-controls")).hidden = !on; });
+  document.querySelectorAll("#v-token .tok-main [role=tab]").forEach(t => { const on = t.id === id; t.setAttribute("aria-selected", on); $(t.getAttribute("aria-controls")).hidden = !on; });
   if (id === "tt-holders") renderHolders();
   if (id === "tt-mine") renderMine();
+  if (id === "tt-posts") loadPosts();
 }
-document.querySelectorAll("#v-token [role=tab]").forEach(t => t.addEventListener("click", () => selectTokenTab(t.id)));
+document.querySelectorAll("#v-token .tok-main [role=tab]").forEach(t => t.addEventListener("click", () => selectTokenTab(t.id)));
+document.querySelectorAll("#orders [role=tab]").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll("#orders [role=tab]").forEach(o => { const on = o === t; o.setAttribute("aria-selected", on); $(o.getAttribute("aria-controls")).hidden = !on; });
+  if (t.id === "ot-auto") renderAutoList(); else loadTokenOrders();
+}));
 $("t-mint").addEventListener("click", async () => { try { await navigator.clipboard.writeText(S.tokenMint); toast("Mint address copied.", "ok"); } catch (_) {} });
 
 /* ---------- trade panel ---------- */
@@ -632,8 +656,8 @@ function renderTradePanel() {
   const ps = $("presets"); ps.textContent = "";
   settings.presets.forEach((p, i) => {
     const b = make("button"); b.type = "button"; b.setAttribute("aria-pressed", settings.preset === i);
-    b.append(make("b", "", `P${i + 1}`), `${p.slippageBps / 100}% · ${p.priority === "veryHigh" ? "turbo" : p.priority}`);
-    b.title = `Slippage ${p.slippageBps / 100}%, priority ${p.priority} up to ${p.maxSol} SOL`;
+    b.append(make("b", "", `P${i + 1}${p.mev ? " 🛡" : ""}`), `${p.slippageBps / 100}% · ${p.priority === "veryHigh" ? "turbo" : p.priority}${p.tipSol ? " · jito" : ""}`);
+    b.title = `Slippage ${p.slippageBps / 100}%, priority ${p.priority} up to ${p.maxSol} SOL${p.tipSol ? `, Jito tip ${p.tipSol} SOL${p.mev ? ", MEV-protected (Jito only)" : ""}` : ""}`;
     b.addEventListener("click", () => { settings.preset = i; saveSettings(); renderTradePanel(); scheduleQuote(); });
     ps.append(b);
   });
@@ -672,7 +696,7 @@ function updateGo() {
   const pr = preset();
   text($("fine"), T.ghost
     ? `Ghost: ${FEE_BPS / 100}% fee from your wallet plus the NEAR Intents routing fee, then a fresh ghost wallet buys. Funding and exit amounts and timing can still be matched, so vary them.`
-    : `${FEE_BPS / 100}% fee in SOL · P${settings.preset + 1}: ${pr.slippageBps / 100}% slippage, ${pr.priority} priority up to ${pr.maxSol} SOL · ${inst ? "signed instantly by your instant wallet" : "you approve every trade in your wallet"}`);
+    : `${FEE_BPS / 100}% fee in SOL · P${settings.preset + 1}: ${pr.slippageBps / 100}% slippage, ${pr.priority} priority up to ${pr.maxSol} SOL${pr.tipSol ? ` · Jito tip ${pr.tipSol} SOL${pr.mev ? " (MEV-protected)" : ""}` : ""} · ${inst ? "signed instantly by your instant wallet" : "you approve every trade in your wallet"}`);
 }
 function scheduleQuote() {
   updateGo(); clearTimeout(T.quoteTimer);
@@ -725,10 +749,217 @@ $("go").addEventListener("click", async () => {
     const r = await executeTrade({ side, mint, amountRaw: raw, onStatus: m => { text(go, m); setTradeStatus(m); } });
     setTradeStatus(side === "buy" ? `Bought ≈${num(r.tokens)} ${sym}.` : `Sold ${num(r.tokens)} ${sym} for ≈${solFmt(r.sol)} SOL.`, "ok", r.sig);
     amt.value = ""; $("quote").hidden = true;
-    setTimeout(() => { refreshTokenBal(); renderMine(); }, 1500);
+    setTimeout(() => { refreshTokenBal(); renderMine(); loadTokenOrders(); }, 1500);
   } catch (e) { setTradeStatus(errMsg(e), "err"); }
   finally { S.busy = false; updateGo(); }
 });
+
+/* ---------- limit orders (Jupiter Trigger, on-chain) ---------- */
+const LO = { side: "buy" };
+function renderOrdersPanel() {
+  if (!S.tokenMint) return;
+  const buy = LO.side === "buy", sym = symbolOf(S.tokenMint);
+  $("lo-side").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === LO.side));
+  text($("lo-amt-label"), buy ? "Spend (SOL)" : `Sell (${sym})`);
+  text($("lo-unit"), buy ? "SOL" : sym);
+  const steps = $("lo-steps"); steps.textContent = "";
+  for (const d of buy ? [-10, -25, -50, -75] : [25, 50, 100, 200]) {
+    const b = make("button", "", `${d > 0 ? "+" : ""}${d}%`); b.type = "button";
+    b.addEventListener("click", () => { if (!T.priceUsd) return setTradeStatus("No live price yet for this token.", "err"); $("lo-price").value = String(+(T.priceUsd * (1 + d / 100)).toPrecision(4)); limitHint(); });
+    steps.append(b);
+  }
+  limitHint(); loadTokenOrders(); renderAutoList();
+}
+function limitHint() {
+  const p = Number($("lo-price").value), mcNow = T.curve && S.solUsd ? T.curve.mcapSol * S.solUsd : T.info?.mcap;
+  text($("lo-mc"), p > 0 && T.priceUsd && mcNow ? `≈ MC ${usd(mcNow * p / T.priceUsd)} · now ${price(T.priceUsd)}` : T.priceUsd ? `now ${price(T.priceUsd)}` : "");
+}
+$("lo-side").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; LO.side = b.dataset.v; $("lo-price").value = ""; $("lo-amt").value = ""; renderOrdersPanel(); });
+$("lo-price").addEventListener("input", limitHint);
+$("lo-go").addEventListener("click", async () => {
+  const btn = $("lo-go"), mint = S.tokenMint;
+  if (S.busy) return;
+  S.busy = true; btn.disabled = true;
+  try {
+    if (settings.from === "main" && !S.wallet && !(await ensureConnected())) return;
+    const dec = T.decimals ?? await decimalsOf(mint), buy = LO.side === "buy";
+    const amountRaw = toRaw($("lo-amt").value, buy ? 9 : dec);
+    if (!amountRaw) throw new SwapError(buy ? "Enter how much SOL to spend." : "Enter how many tokens to sell.");
+    if (!S.solUsd) throw new SwapError("Waiting for the SOL price. Try again in a moment.");
+    const a = limitAmounts({ side: LO.side, mint, amountRaw, priceUsd: Number($("lo-price").value), solUsd: S.solUsd, decimals: dec });
+    if (!buy && T.priceUsd && Number($("lo-price").value) <= T.priceUsd) throw new SwapError("A sell limit below the current price would fill right away. Use a market sell, or Auto for a stop loss.");
+    if (buy && T.priceUsd && Number($("lo-price").value) >= T.priceUsd) throw new SwapError("A buy limit above the current price would fill right away. Use a market buy instead.");
+    const signer = await signerFor(settings.from), exp = Number($("lo-exp").value);
+    text(btn, "Creating order…");
+    const res = await trig.create({ inputMint: a.inputMint, outputMint: a.outputMint, maker: signer.pk, making: a.making, taking: a.taking, expiredAt: exp ? Math.floor(Date.now() / 1000) + exp : undefined });
+    text(btn, signer.local ? "Submitting…" : "Approve in wallet…");
+    const r = await signAndExecute({ web3, api: trig, res, sign: signWith(signer) });
+    toast(`Limit ${buy ? "buy" : "sell"} placed for ${symbolOf(mint)} at ${price(Number($("lo-price").value))}.`, "ok", r.signature);
+    $("lo-amt").value = "";
+    setTimeout(loadTokenOrders, 2500);
+  } catch (e) { toast(errMsg(e), "err"); }
+  finally { S.busy = false; btn.disabled = false; text(btn, "Place limit order"); }
+});
+async function ordersFor(from) {
+  const pk = from === "instant" ? S.instant?.pk : S.wallet?.pk;
+  if (!pk) return [];
+  const res = await trig.list(pk, "active");
+  return (res?.orders || []).map(o => ({ ...describeOrder(o, S.solUsd), from }));
+}
+async function loadTokenOrders() {
+  const host = $("lo-list"), mint = S.tokenMint;
+  host.textContent = "";
+  if (!S.wallet) return;
+  try {
+    const list = (await Promise.all(["main", "instant"].map(f => ordersFor(f).catch(() => [])))).flat().filter(o => o.mint === mint);
+    if (S.tokenMint !== mint) return;
+    for (const o of list) host.append(orderRow(o, loadTokenOrders));
+  } catch (_) {}
+}
+function orderRow(o, after) {
+  const row = make("div", "orow"), info = make("div"), x = make("button", "btn small", "Cancel"); x.type = "button";
+  info.append(make("b", o.side === "buy" ? "up" : "down", `Limit ${o.side}`), ` ${num(o.tokens)} ${symbolOf(o.mint)} @ ${price(o.priceUsd)} · ${solFmt(o.sol)} SOL`, make("div", "muted", `${o.from === "instant" ? "⚡ instant" : "main"}${o.filledPct > 0 ? ` · ${o.filledPct.toFixed(0)}% filled` : ""}${o.expiredAt ? ` · expires ${new Date(/^\d+$/.test(String(o.expiredAt)) ? Number(o.expiredAt) * 1000 : Date.parse(o.expiredAt)).toLocaleString()}` : ""}`));
+  x.addEventListener("click", async () => {
+    x.disabled = true; text(x, "Cancelling…");
+    try {
+      const signer = await signerFor(o.from), res = await trig.cancel(signer.pk, o.key);
+      const r = await signAndExecute({ web3, api: trig, res, sign: signWith(signer) });
+      toast("Limit order cancelled. Unfilled funds return to the wallet.", "ok", r.signature);
+      setTimeout(after, 2000);
+    } catch (e) { toast(errMsg(e), "err"); x.disabled = false; text(x, "Cancel"); }
+  });
+  row.append(info, x);
+  return row;
+}
+
+/* ---------- autopilot: TP / SL / trailing stop (instant wallet, while open) ---------- */
+const RKEY = "ghostprint-autopilot";
+const rules = () => store.get(RKEY, []);
+const saveRules = l => { store.set(RKEY, l.slice(-200)); updateAutoChip(); };
+document.querySelectorAll("#op-auto [data-add]").forEach(b => b.addEventListener("click", async () => {
+  const kind = b.dataset.add, ids = { tp: ["ap-tp", "ap-tp-sell"], sl: ["ap-sl", "ap-sl-sell"], trail: ["ap-tr", "ap-tr-sell"] }[kind];
+  try {
+    const inst = await instantWallet();
+    if (!T.priceUsd) throw new SwapError("No live price yet for this token.");
+    const r = newRule({ wallet: inst.pk, mint: S.tokenMint, symbol: symbolOf(S.tokenMint), kind, pct: Number($(ids[0]).value), sellPct: Number($(ids[1]).value), entryUsd: T.priceUsd });
+    saveRules([...rules(), r]); renderAutoList();
+    toast(`${kind === "tp" ? "Take profit" : kind === "sl" ? "Stop loss" : "Trailing stop"} armed for ${r.symbol} at ${price(ruleTarget(r))}.`, "ok");
+  } catch (e) { toast(errMsg(e), "err"); }
+}));
+function ruleRow(r, after) {
+  const row = make("div", "orow"), info = make("div"), x = make("button", "btn small", r.status === "armed" ? "Remove" : "Clear"); x.type = "button";
+  const name = { tp: "Take profit", sl: "Stop loss", trail: "Trailing stop" }[r.kind];
+  info.append(make("b", r.kind === "tp" ? "up" : "down", name), ` ${r.symbol} · sell ${r.sellPct}% at ${price(ruleTarget(r))}`, make("div", "muted", `${r.kind === "trail" ? `${r.pct}% below peak ${price(r.peakUsd)}` : `${r.kind === "tp" ? "+" : "−"}${r.pct}% from ${price(r.entryUsd)}`} · ${r.status}${r.note ? ` · ${r.note}` : ""}`));
+  x.addEventListener("click", () => { saveRules(rules().filter(y => y.id !== r.id)); after(); });
+  row.append(info, x);
+  return row;
+}
+function renderAutoList() {
+  const host = $("ap-list"); host.textContent = "";
+  for (const r of rules().filter(r => r.mint === S.tokenMint)) host.append(ruleRow(r, renderAutoList));
+}
+let autoBusy = false;
+async function autopilot() {
+  const armed = rules().filter(r => r.status === "armed");
+  updateAutoChip();
+  if (!armed.length || !S.instant || autoBusy) return;
+  autoBusy = true;
+  try {
+    const prices = await jup.prices([...new Set(armed.map(r => r.mint))]);
+    const all = rules();
+    for (const r of all) {
+      if (r.status !== "armed" || r.wallet !== S.instant.pk) continue;
+      const ev = evaluateRule(r, prices[r.mint]?.usdPrice);
+      if (ev.peakUsd && ev.peakUsd !== r.peakUsd) r.peakUsd = ev.peakUsd;
+      if (ev.fire) { r.status = "firing"; saveRules(all); await fireRule(r, all); }
+    }
+    saveRules(all);
+    if (S.route === "token") renderAutoList();
+  } catch (_) {} finally { autoBusy = false; }
+}
+async function fireRule(r, all) {
+  try {
+    const accts = await connection.getParsedTokenAccountsByOwner(S.instant.kp.publicKey, { mint: new web3.PublicKey(r.mint) });
+    const bal = accts.value.reduce((n, a) => n + BigInt(a.account.data.parsed.info.tokenAmount.amount), 0n);
+    const amountRaw = r.sellPct >= 100 ? bal : bal * BigInt(Math.round(r.sellPct * 100)) / 10000n;
+    if (amountRaw <= 0n) { r.status = "done"; r.note = "nothing left to sell"; return; }
+    const res = await executeTrade({ side: "sell", mint: r.mint, amountRaw, from: "instant" });
+    r.status = "done"; r.note = `sold for ${solFmt(res.sol)} SOL`; r.sig = res.sig;
+    if (r.sellPct >= 100) for (const o of all) if (o !== r && o.mint === r.mint && o.wallet === r.wallet && o.status === "armed") { o.status = "cancelled"; o.note = "position closed"; }
+    toast(`Autopilot: ${r.symbol} ${r.kind === "tp" ? "take profit" : r.kind === "sl" ? "stop loss" : "trailing stop"} sold ${r.sellPct}% for ≈${solFmt(res.sol)} SOL.`, "ok", res.sig);
+  } catch (e) { r.status = "error"; r.note = errMsg(e).slice(0, 80); toast(`Autopilot couldn't sell ${r.symbol}: ${errMsg(e)}`, "err"); }
+}
+function updateAutoChip() {
+  const chip = $("autochip"), armed = rules().filter(r => r.status === "armed").length, sn = snipes().filter(x => x.status === "armed").length;
+  chip.hidden = !(armed + sn);
+  const paused = !S.instant;
+  chip.classList.toggle("paused", paused);
+  text(chip, paused ? `🤖 ${armed + sn} paused · unlock` : `🤖 ${armed} rule${armed === 1 ? "" : "s"}${sn ? ` · ${sn} snipe${sn === 1 ? "" : "s"}` : ""}`);
+  chip.title = paused ? "Autopilot needs your instant wallet unlocked in this tab." : "Autopilot is watching prices and migrations. Keep this terminal open.";
+}
+$("autochip").addEventListener("click", async () => { if (!S.instant) { try { await instantWallet(); updateAutoChip(); toast("Autopilot resumed.", "ok"); } catch (e) { toast(errMsg(e), "err"); } } else location.hash = "#/portfolio"; });
+
+/* ---------- migration sniper ---------- */
+const SKEY = "ghostprint-snipes";
+const snipes = () => store.get(SKEY, []);
+const saveSnipes = l => { store.set(SKEY, l.slice(-100)); updateAutoChip(); pulseDirty = true; };
+async function toggleSnipe(mint) {
+  const l = snipes(), on = l.find(x => x.mint === mint && x.status === "armed");
+  if (on) { saveSnipes(l.filter(x => x !== on)); toast(`Snipe cancelled for ${symbolOf(mint)}.`, "info"); renderPulse(true); return; }
+  try {
+    const inst = await instantWallet();
+    const amount = $("qbamt").value || settings.quickBuy;
+    if (!toRaw(amount, 9)) throw new SwapError("Set a quick-buy amount first.");
+    saveSnipes([...l.filter(x => x.mint !== mint), { mint, symbol: symbolOf(mint), amount, wallet: inst.pk, status: "armed", createdAt: Date.now() }]);
+    toast(`Sniping ${symbolOf(mint)}: buys ${amount} SOL from your instant wallet the moment it migrates. Keep this tab open.`, "ok");
+    renderPulse(true);
+  } catch (e) { toast(errMsg(e), "err"); }
+}
+const firing = new Set();
+async function fireSnipe(mint) {
+  const l = snipes(), s = l.find(x => x.mint === mint && x.status === "armed");
+  if (!s || firing.has(mint)) return;
+  firing.add(mint);
+  try {
+    if (!S.instant || S.instant.pk !== s.wallet) { s.status = "missed"; s.note = "instant wallet was locked"; toast(`${s.symbol} migrated, but your instant wallet was locked so the snipe didn't fire.`, "err"); return; }
+    s.status = "firing"; saveSnipes(l);
+    const r = await executeTrade({ side: "buy", mint, amountRaw: toRaw(s.amount, 9), from: "instant" });
+    s.status = "done"; s.sig = r.sig; s.note = `bought ${num(r.tokens)}`;
+    toast(`Sniped ${s.symbol} on migration: ≈${num(r.tokens)} for ${s.amount} SOL.`, "ok", r.sig);
+    const entryUsd = r.tokens && S.solUsd ? r.sol / r.tokens * S.solUsd : null;
+    const add = [];
+    if (entryUsd && settings.autoTp > 0) add.push(newRule({ wallet: s.wallet, mint, symbol: s.symbol, kind: "tp", pct: settings.autoTp, sellPct: 50, entryUsd }));
+    if (entryUsd && settings.autoSl > 0) add.push(newRule({ wallet: s.wallet, mint, symbol: s.symbol, kind: "sl", pct: settings.autoSl, sellPct: 100, entryUsd }));
+    if (add.length) saveRules([...rules(), ...add]);
+  } catch (e) { s.status = "error"; s.note = errMsg(e).slice(0, 80); toast(`Snipe for ${s.symbol} failed: ${errMsg(e)}`, "err"); }
+  finally { saveSnipes(l); firing.delete(mint); }
+}
+
+/* ---------- X posts ---------- */
+async function loadPosts() {
+  const host = $("tp-posts"), mint = S.tokenMint, sym = symbolOf(mint);
+  host.textContent = "";
+  if (!PROXY) { host.append(make("div", "tdempty", "Posts from X need the Ghostprint proxy with an X API key (see worker/README.md). X charges per post read, so they only load here.")); return; }
+  host.append(make("div", "tdempty", "Loading posts…"));
+  try {
+    const q = /^[A-Za-z][A-Za-z0-9_]{0,15}$/.test(sym) ? `(${mint} OR $${sym})` : mint;
+    const res = await fetch(`${PROXY}/x/search?${new URLSearchParams({ q })}`);
+    const data = await res.json();
+    if (S.tokenMint !== mint) return;
+    host.textContent = "";
+    if (!res.ok) { host.append(make("div", "tdempty", data.error || "X is unavailable right now.")); return; }
+    if (!data.posts?.length) { host.append(make("div", "tdempty", "No recent posts mention this token.")); return; }
+    for (const p of data.posts) {
+      const row = make("div", "post"), body = make("div"), who = make("div", "who");
+      who.append(make("b", "", p.author?.name || "—"), ` @${p.author?.username || "?"} · ${num(p.author?.followers || 0)} followers · ${ago(Date.now() - Date.parse(p.createdAt))}`);
+      const meta = make("div", "who", `♥ ${num(p.likes)} · ↻ ${num(p.reposts)} · `);
+      meta.append(link(`https://x.com/${encodeURIComponent(p.author?.username || "i")}/status/${encodeURIComponent(p.id)}`, "Open ↗"));
+      body.append(who, make("p", "", p.text), meta);
+      row.append(icon(make("img"), p.author?.image), body);
+      host.append(row);
+    }
+  } catch (e) { host.textContent = ""; host.append(make("div", "tdempty", `Couldn't load posts: ${errMsg(e)}`)); }
+}
 
 /* ---------- Ghost mode ---------- */
 let solAsset = null;
@@ -914,62 +1145,108 @@ $("tk-form").addEventListener("submit", e => { e.preventDefault(); addTracked($(
 
 /* ---------- Portfolio ---------- */
 let pfWallet = "main";
+let pfRun = 0;
 async function renderPortfolio() {
+  const run = ++pfRun, stale = () => run !== pfRun;
   const cards = $("pf-cards"), table = $("pf-table"), act = $("pf-act");
   $("pf-wallet").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === pfWallet));
   cards.textContent = ""; table.textContent = ""; act.textContent = "";
   const card = (k, v, c) => { const d = make("div", "panel card"); d.append(make("div", "k", k), cls(make("div", "v", v), c)); cards.append(d); };
-  if (!S.wallet) { card("Wallet", "Not connected"); emptyRow(table, "Connect a wallet to see positions."); renderGhosts(); return; }
+  if (!S.wallet) { card("Wallet", "Not connected"); emptyRow(table, "Connect a wallet to see positions."); renderGhosts(); renderPfOrders(); return; }
   const pk = pfWallet === "instant" ? S.instant?.pk : S.wallet.pk;
-  if (!pk) { card("Instant wallet", "Locked"); const tr = table.insertRow(), td = make("td", "tdempty"); const b = make("button", "btn small primary", "Unlock instant wallet"); b.type = "button"; b.addEventListener("click", async () => { try { await instantWallet(); renderPortfolio(); } catch (e) { toast(errMsg(e), "err"); } }); td.append(b); tr.append(td); renderGhosts(); return; }
+  if (!pk) { card("Instant wallet", "Locked"); const tr = table.insertRow(), td = make("td", "tdempty"); const b = make("button", "btn small primary", "Unlock instant wallet"); b.type = "button"; b.addEventListener("click", async () => { try { await instantWallet(); renderPortfolio(); } catch (e) { toast(errMsg(e), "err"); } }); td.append(b); tr.append(td); renderGhosts(); renderPfOrders(); return; }
   emptyRow(table, "Loading positions…");
+  const log = tradesOf(pk);
+  if (log.length) act.append(tradeTable(log)); else emptyRow(act, "Trades you make in this terminal show up here. Import on-chain history to include trades made elsewhere.");
+  renderGhosts(); renderPfOrders();
   try {
     const owner = new web3.PublicKey(pk);
     const [bal, accts] = await Promise.all([connection.getBalance(owner), Promise.all(["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].map(p => connection.getParsedTokenAccountsByOwner(owner, { programId: new web3.PublicKey(p) }).then(r => r.value).catch(() => []))).then(x => x.flat())]);
+    if (stale()) return;
     const held = new Map();
     for (const a of accts) { const i = a.account.data.parsed.info, n = Number(i.tokenAmount.uiAmountString ?? i.tokenAmount.uiAmount ?? 0); if (n > 0 && i.mint !== SOL_MINT) held.set(i.mint, (held.get(i.mint) || 0) + n); }
-    const log = tradesOf(pk);
     const mints = [...new Set([...held.keys(), ...log.map(t => t.mint)])].slice(0, 50);
-    const [prices] = await Promise.all([jup.prices(mints).catch(() => ({})), lookupTokens(mints)]);
-    const solUsd = S.solUsd || 0;
-    const pSol = Object.fromEntries(mints.map(m => [m, prices[m]?.usdPrice && solUsd ? prices[m].usdPrice / solUsd : undefined]));
-    const rows = pnl(log, pSol);
-    const byMint = new Map(rows.map(r => [r.mint, r]));
-    const all = mints.map(m => { const r = byMint.get(m) || { mint: m, avg: 0, realized: 0, unrealized: null, total: 0, pct: 0 }; const h = held.get(m) || 0; const value = pSol[m] != null ? h * pSol[m] : null; return { ...r, onchain: h, value, unrealized: r.boughtTok ? (value != null ? value - Math.min(h, r.holding) * r.avg : null) : null }; })
-      .filter(r => r.onchain > 0 || r.realized).sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
-    const total = all.reduce((n, r) => n + (r.value || 0), 0), unreal = all.reduce((n, r) => n + (r.unrealized || 0), 0), real = all.reduce((n, r) => n + (r.realized || 0), 0);
-    card(`${pfWallet === "instant" ? "Instant" : "Main"} SOL`, `${solFmt(bal / 1e9)} SOL`);
-    card("Positions value", `${solFmt(total)} SOL${solUsd ? ` · ${usd(total * solUsd)}` : ""}`);
-    card("Unrealized PnL", `${unreal >= 0 ? "+" : ""}${solFmt(unreal)} SOL`, unreal);
-    card("Realized PnL", `${real >= 0 ? "+" : ""}${solFmt(real)} SOL`, real);
-    table.textContent = "";
-    const head = make("tr"); ["Token", "Holding", "Value", "Avg cost", "Unrealized", "Realized", "Sell"].forEach((h, i) => head.append(make("th", i ? "num" : "", h))); table.append(head);
-    if (!all.length) emptyRow(table, "No positions yet.");
-    for (const r of all) {
-      const tr = make("tr"), tok = make("td"), a = make("a", "cell-tok"); a.href = `#/token/${r.mint}`; a.append(icon(make("img", "tok-icon"), iconOf(r.mint)), make("b", "", symbolOf(r.mint))); tok.append(a);
-      const sells = make("td", "num");
-      for (const pctv of [50, 100]) {
-        const b = make("button", "btn small", `${pctv}%`); b.type = "button";
-        b.addEventListener("click", async () => {
-          b.disabled = true;
-          try {
-            const dec = await decimalsOf(r.mint), accts2 = await connection.getParsedTokenAccountsByOwner(owner, { mint: new web3.PublicKey(r.mint) });
-            const rawBal = accts2.value.reduce((n, x) => n + BigInt(x.account.data.parsed.info.tokenAmount.amount), 0n);
-            const amountRaw = pctv === 100 ? rawBal : rawBal * BigInt(pctv) / 100n;
-            const res = await executeTrade({ side: "sell", mint: r.mint, amountRaw, from: pfWallet });
-            toast(`Sold ${num(Number(amountRaw) / 10 ** dec)} ${symbolOf(r.mint)} for ≈${solFmt(res.sol)} SOL`, "ok", res.sig);
-            setTimeout(renderPortfolio, 2000);
-          } catch (e) { toast(errMsg(e), "err"); b.disabled = false; }
-        });
-        sells.append(b, " ");
+    // draw from the chain right away; prices and PnL fill in when Jupiter answers
+    const draw = (prices, priced) => {
+      if (stale()) return;
+      const solUsd = S.solUsd || 0;
+      const pSol = Object.fromEntries(mints.map(m => [m, prices[m]?.usdPrice && solUsd ? prices[m].usdPrice / solUsd : undefined]));
+      const byMint = new Map(pnl(log, pSol).map(r => [r.mint, r]));
+      const all = mints.map(m => { const r = byMint.get(m) || { mint: m, avg: 0, realized: 0, unrealized: null, total: 0, pct: 0, holding: 0 }; const h = held.get(m) || 0; const value = pSol[m] != null ? h * pSol[m] : null; return { ...r, onchain: h, value, unrealized: r.boughtTok ? (value != null ? value - Math.min(h, r.holding) * r.avg : null) : null }; })
+        .filter(r => r.onchain > 0 || r.realized).sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || b.onchain - a.onchain);
+      const total = all.reduce((n, r) => n + (r.value || 0), 0), unreal = all.reduce((n, r) => n + (r.unrealized || 0), 0), real = all.reduce((n, r) => n + (r.realized || 0), 0);
+      cards.textContent = "";
+      card(`${pfWallet === "instant" ? "Instant" : "Main"} SOL`, `${solFmt(bal / 1e9)} SOL`);
+      card("Positions value", priced ? `${solFmt(total)} SOL${solUsd ? ` · ${usd(total * solUsd)}` : ""}` : "pricing…");
+      card("Unrealized PnL", priced ? `${unreal >= 0 ? "+" : ""}${solFmt(unreal)} SOL` : "…", priced ? unreal : 0);
+      card("Realized PnL", `${real >= 0 ? "+" : ""}${solFmt(real)} SOL`, real);
+      table.textContent = "";
+      const head = make("tr"); ["Token", "Holding", "Value", "Avg cost", "Unrealized", "Realized", "Sell"].forEach((h, i) => head.append(make("th", i ? "num" : "", h))); table.append(head);
+      if (!all.length) emptyRow(table, "No positions yet.");
+      for (const r of all) {
+        const tr = make("tr"), tok = make("td"), a = make("a", "cell-tok"); a.href = `#/token/${r.mint}`; a.append(icon(make("img", "tok-icon"), iconOf(r.mint)), make("b", "", symbolOf(r.mint))); tok.append(a);
+        const sells = make("td", "num");
+        for (const pctv of [50, 100]) {
+          const b = make("button", "btn small", `${pctv}%`); b.type = "button";
+          b.addEventListener("click", async () => {
+            b.disabled = true;
+            try {
+              const dec = await decimalsOf(r.mint), accts2 = await connection.getParsedTokenAccountsByOwner(owner, { mint: new web3.PublicKey(r.mint) });
+              const rawBal = accts2.value.reduce((n, x) => n + BigInt(x.account.data.parsed.info.tokenAmount.amount), 0n);
+              const amountRaw = pctv === 100 ? rawBal : rawBal * BigInt(pctv) / 100n;
+              const res = await executeTrade({ side: "sell", mint: r.mint, amountRaw, from: pfWallet });
+              toast(`Sold ${num(Number(amountRaw) / 10 ** dec)} ${symbolOf(r.mint)} for ≈${solFmt(res.sol)} SOL`, "ok", res.sig);
+              setTimeout(renderPortfolio, 2000);
+            } catch (e) { toast(errMsg(e), "err"); b.disabled = false; }
+          });
+          sells.append(b, " ");
+        }
+        tr.append(tok, make("td", "num", num(r.onchain)), make("td", "num", r.value != null ? `${solFmt(r.value)} SOL` : priced ? "—" : "…"), make("td", "num", r.avg ? price(r.avg * solUsd) : "—"), cls(make("td", "num", r.unrealized != null ? `${r.unrealized >= 0 ? "+" : ""}${solFmt(r.unrealized)}` : "—"), r.unrealized), cls(make("td", "num", r.realized ? `${r.realized >= 0 ? "+" : ""}${solFmt(r.realized)}` : "—"), r.realized), sells);
+        table.append(tr);
       }
-      tr.append(tok, make("td", "num", num(r.onchain)), make("td", "num", r.value != null ? `${solFmt(r.value)} SOL` : "—"), make("td", "num", r.avg ? price(r.avg * solUsd) : "—"), cls(make("td", "num", r.unrealized != null ? `${r.unrealized >= 0 ? "+" : ""}${solFmt(r.unrealized)}` : "—"), r.unrealized), cls(make("td", "num", r.realized ? `${r.realized >= 0 ? "+" : ""}${solFmt(r.realized)}` : "—"), r.realized), sells);
-      table.append(tr);
-    }
-    if (log.length) act.append(tradeTable(log)); else emptyRow(act, "Trades you make in this terminal show up here.");
-  } catch (e) { table.textContent = ""; emptyRow(table, `Couldn't load positions: ${errMsg(e)}`); }
-  renderGhosts();
+    };
+    draw({}, false);
+    const [prices] = await Promise.all([jup.prices(mints).catch(() => ({})), lookupTokens(mints)]);
+    draw(prices, true);
+  } catch (e) { if (!stale()) { table.textContent = ""; emptyRow(table, `Couldn't load positions: ${errMsg(e)}`); } }
 }
+let pfoRun = 0;
+async function renderPfOrders() {
+  const run = ++pfoRun, t = $("pf-orders");
+  const host = make("div", "olist"); host.style.padding = "8px";
+  const limits = S.wallet ? (await Promise.all(["main", "instant"].map(f => ordersFor(f).catch(() => [])))).flat() : [];
+  await lookupTokens(limits.map(o => o.mint));
+  if (run !== pfoRun) return;
+  t.textContent = "";
+  for (const o of limits) host.append(orderRow(o, renderPfOrders));
+  for (const r of rules()) host.append(ruleRow(r, renderPfOrders));
+  for (const sn of snipes()) {
+    const row = make("div", "orow"), info = make("div"), x = make("button", "btn small", sn.status === "armed" ? "Cancel" : "Clear"); x.type = "button";
+    const a = make("a", "", sn.symbol); a.href = `#/token/${sn.mint}`;
+    info.append(make("b", "warnc", "Snipe "), a, ` · ${sn.amount} SOL on migration`, make("div", "muted", `${sn.status}${sn.note ? ` · ${sn.note}` : ""}`));
+    x.addEventListener("click", () => { saveSnipes(snipes().filter(y => y.mint !== sn.mint)); renderPfOrders(); });
+    row.append(info, x); host.append(row);
+  }
+  const tr = make("tr"), td = make("td"); td.colSpan = 12; td.style.padding = "0";
+  if (!host.childElementCount) td.append(make("div", "tdempty", "No open limit orders, autopilot rules or snipes."));
+  else td.append(host);
+  tr.append(td); t.append(tr);
+}
+$("imp-go").addEventListener("click", async () => {
+  const btn = $("imp-go");
+  try {
+    if (!S.wallet && !(await ensureConnected())) return;
+    const pk = pfWallet === "instant" ? (await instantWallet()).pk : S.wallet.pk;
+    btn.disabled = true;
+    const { swaps } = await walletHistory({ connection, web3, wallet: pk, limit: 100, onProgress: (d, n) => text($("imp-note"), `Reading ${d}/${n} transactions…`) });
+    await lookupTokens(swaps.map(x => x.mint));
+    const before = tradesOf(pk).length, merged = mergeHistory(tradesOf(pk), swaps, symbolOf);
+    store.set(TKEY(pk), merged.slice(0, 1000));
+    text($("imp-note"), `Added ${merged.length - before} swap${merged.length - before === 1 ? "" : "s"} from the last 100 transactions.`);
+    renderPortfolio();
+  } catch (e) { text($("imp-note"), errMsg(e)); }
+  finally { btn.disabled = false; }
+});
 $("pf-wallet").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pfWallet = b.dataset.w; renderPortfolio(); });
 $("x-run").addEventListener("click", async () => {
   if (!S.wallet && !(await ensureConnected())) return;
@@ -1133,24 +1410,32 @@ $("settingsbtn").addEventListener("click", () => openModal("Settings", body => {
   const qb = make("div", "box"); qb.append(make("h3", "", "Quick amounts"));
   const g1 = make("div", "grid"), buyIns = settings.buyAmounts.map((v, i) => { const [l, inp] = field(`Buy ${i + 1} (SOL)`, v, { inputMode: "decimal" }); g1.append(l); return inp; }); qb.append(g1);
   const g2 = make("div", "grid"), sellIns = settings.sellPcts.map((v, i) => { const [l, inp] = field(`Sell ${i + 1} (%)`, v, { inputMode: "numeric" }); g2.append(l); return inp; }); qb.append(g2);
-  const pr = make("div", "box"); pr.append(make("h3", "", "Presets"), make("p", "", "Slippage, priority level and the most you'll pay for priority. P1–P3 switch in the trade panel or with keys 1–3."));
+  const pr = make("div", "box"); pr.append(make("h3", "", "Presets"), make("p", "", "Slippage, priority level, the most you'll pay for priority, and an optional Jito tip (at least 0.000001 SOL) for faster landing. MEV protect sends only through Jito, so the trade never touches the public mempool. P1–P3 switch in the trade panel or with keys 1–3."));
   const presetIns = settings.presets.map((p, i) => {
     const g = make("div", "grid");
     const [l1, s] = field(`P${i + 1} slippage %`, p.slippageBps / 100, { inputMode: "decimal" });
     const l2 = make("label", "", `P${i + 1} priority`), sel = make("select", "inp"); ["medium", "high", "veryHigh"].forEach(v => { const o = make("option", "", v === "veryHigh" ? "turbo" : v); o.value = v; o.selected = p.priority === v; sel.append(o); }); l2.append(sel);
     const [l3, m] = field(`P${i + 1} max priority SOL`, p.maxSol, { inputMode: "decimal" });
-    g.append(l1, l2, l3); pr.append(g);
-    return { s, sel, m };
+    const [l4, tip] = field(`P${i + 1} Jito tip SOL`, p.tipSol || 0, { inputMode: "decimal" });
+    const l5 = make("label", "", `P${i + 1} MEV protect`), mev = make("input"); mev.type = "checkbox"; mev.checked = !!p.mev; l5.append(mev);
+    g.append(l1, l2, l3, l4, l5); pr.append(g);
+    return { s, sel, m, tip, mev };
   });
-  const pulse = make("div", "box"); pulse.append(make("h3", "", "Pulse"));
+  const pulse = make("div", "box"); pulse.append(make("h3", "", "Pulse and autopilot"));
   const [lfs, fs] = field("Final Stretch starts at bonding curve %", settings.finalStretch, { inputMode: "numeric" }); pulse.append(lfs);
+  const ag = make("div", "grid");
+  const [lat, autoTpIn] = field("After a snipe: take profit at +% (sells half, 0 = off)", settings.autoTp || 0, { inputMode: "decimal" });
+  const [las, autoSlIn] = field("After a snipe: stop loss at −% (0 = off)", settings.autoSl || 0, { inputMode: "decimal" });
+  ag.append(lat, las); pulse.append(ag);
   const net = make("div", "box"); net.append(make("h3", "", "Network"), make("p", "", "The public Solana RPC is rate limited. A Helius, Triton or QuickNode URL makes Pulse, trades and the tracker much faster. Reloads the page."));
   const [lrpc, rpcIn] = field("RPC URL", rpcUrl, { spellcheck: false }); net.append(lrpc);
   const save = make("button", "btn primary", "Save"); save.type = "button";
   save.addEventListener("click", () => {
     buyIns.forEach((inp, i) => { if (toRaw(inp.value, 9)) settings.buyAmounts[i] = inp.value.trim(); });
     sellIns.forEach((inp, i) => { const v = Math.round(Number(inp.value)); if (v > 0 && v <= 100) settings.sellPcts[i] = v; });
-    presetIns.forEach((p, i) => { const s = Number(p.s.value), m = Number(p.m.value); settings.presets[i] = { slippageBps: Math.round(Math.min(50, Math.max(0.1, s || 3)) * 100), priority: p.sel.value, maxSol: Math.min(0.1, Math.max(0, m || 0.001)) }; });
+    presetIns.forEach((p, i) => { const s = Number(p.s.value), m = Number(p.m.value), tip = Number(p.tip.value); settings.presets[i] = { slippageBps: Math.round(Math.min(50, Math.max(0.1, s || 3)) * 100), priority: p.sel.value, maxSol: Math.min(0.1, Math.max(0, m || 0.001)), tipSol: tip > 0 ? Math.min(0.05, Math.max(0.000001, tip)) : 0, mev: p.mev.checked && tip > 0 }; });
+    const tp = Number(autoTpIn.value), sl = Number(autoSlIn.value);
+    settings.autoTp = tp > 0 ? Math.min(10000, tp) : 0; settings.autoSl = sl > 0 && sl < 100 ? sl : 0;
     const f = Number(fs.value); if (f >= 10 && f <= 99) settings.finalStretch = f;
     saveSettings();
     const newRpc = rpcIn.value.trim();
@@ -1186,6 +1471,7 @@ seedPulse(); setTimeout(curveLoop, 1500);
 setInterval(() => renderPulse(), 1000);
 setInterval(() => { if (S.route === "token") renderTrades(); }, 5000);
 if (tracked().length) startTracker();
+updateAutoChip(); setInterval(autopilot, 4000);
 route();
 // reconnect silently if a wallet already trusts this site
 for (const w of providers()) { if (w.p.isConnected || w.p.publicKey) { w.p.connect?.({ onlyIfTrusted: true }).then(() => connect(w)).catch(() => {}); break; } }
