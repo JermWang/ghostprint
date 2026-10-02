@@ -69,7 +69,7 @@ export function overview(svg) {
       N("jup", -190, 0, { label: "JUPITER", sub: "routes, prices", glyph: "route", h: 38 }),
       N("near", 0, 190, { label: "NEAR 1CLICK", sub: "ghost routes", glyph: "lock", h: 38 }),
       N("pump", 0, -190, { label: "PUMPPORTAL", sub: "new launches", glyph: "flame", h: 38 }),
-      N("jito", 190, -190, { label: "JITO", sub: "MEV-protect", glyph: "shield", h: 34 }),
+      N("jito", 190, -190, { label: "JITO", sub: "block engine", glyph: "shield", h: 34 }),
       N("dex", -190, 190, { label: "DEXSCREENER", sub: "charts", glyph: "chart", h: 34 })
     ],
     links: [{ from: "you", to: "rpc" }, { from: "you", to: "jup" }, { from: "you", to: "near", bend: "yx" }, { from: "you", to: "pump", bend: "yx" }, { from: "you", to: "jito" }, { from: "you", to: "dex", bend: "yx" }],
@@ -150,11 +150,11 @@ export function tradeTx(svg) {
     ox: 0, oy: 0, w: 220, d: 110, h: 14, gap: 5,
     layers: [
       { label: "COMPUTE BUDGET", note: "limit + priority" },
-      { label: "GHOSTPRINT FEE", note: "0.5% → treasury", accent: true },
       { label: "TOKEN ACCOUNT", note: "opened if needed" },
+      { label: "GHOSTPRINT FEE", note: "0.5% → treasury", accent: true },
       { label: "JUPITER SWAP", note: "best route", ink: true },
       { label: "CLEANUP", note: "unwrap SOL" },
-      { label: "JITO TIP", note: "MEV-protect only", ink: true }
+      { label: "JITO TIP", note: "if preset sets one", ink: true }
     ]
   });
   return fit(svg, { top: 60 });

@@ -4,7 +4,7 @@
 import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE, PROXY_URL } from "./config.js";
 import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError, JITO_URL, JITO_MIN_TIP } from "./swap.js";
 import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, newRule, ruleTarget } from "./orders.js";
-import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
+import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
 import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint, mergeHistory } from "./market.js";
 import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory } from "./feeds.js";
@@ -963,6 +963,9 @@ const GKEY = pk => `ghostprint-ghosts-${pk}`;
 const ghostRecords = () => S.wallet ? store.get(GKEY(S.wallet.pk), []) : [];
 function saveGhost(rec) { const list = ghostRecords().filter(g => g.index !== rec.index); list.push(rec); list.sort((a, b) => a.index - b.index); store.set(GKEY(S.wallet.pk), list); }
 const ROUTE_LABEL = { PENDING_DEPOSIT: "waiting for the deposit", KNOWN_DEPOSIT_TX: "deposit seen", INCOMPLETE_DEPOSIT: "deposit incomplete", PROCESSING: "routing privately", SUCCESS: "delivered" };
+// Any signature at all means the address has history. RPC errors throw: better no buy than a reused ghost.
+const usedOnChain = async pk => (await connection.getSignaturesForAddress(new web3.PublicKey(pk), { limit: 1 })).length > 0;
+const TOKEN_PROGRAMS = ["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"];
 const routeAsset = async () => solAsset || (solAsset = await oc.tokens().then(solAssetId).catch(() => undefined));
 function gsteps(n) { [...$("gsteps").children].forEach((li, i) => { li.className = i < n ? "done" : i === n ? "active" : ""; }); $("gsteps").hidden = n < 0; }
 async function waitForSol(pk, min, ms = 90000) {
@@ -981,8 +984,9 @@ async function ghostBuy() {
   try {
     text(go, "Sign in wallet…"); setTradeStatus("Sign the Ghostprint message so the terminal can open a fresh ghost wallet. It sends nothing.");
     const seed = await walletSeed();
-    const index = ghostRecords().reduce((m, g) => Math.max(m, g.index + 1), 0);
-    const ghost = await deriveGhost(web3, seed, index), gpk = ghost.publicKey.toBase58();
+    text(go, "Finding a fresh ghost…");
+    const { index, ghost } = await nextUnusedGhost(web3, seed, { isUsed: usedOnChain, start: ghostRecords().reduce((m, g) => Math.max(m, g.index + 1), 0) });
+    const gpk = ghost.publicKey.toBase58();
     const fee = raw * BigInt(FEE_BPS) / 10000n, routeAmount = raw - fee;
     gsteps(0); text(go, "Routing…"); setTradeStatus("Getting a private route from NEAR Intents…");
     const { quote, confidential } = await routeQuote({ oc, asset: await routeAsset(), amount: routeAmount, from: main, to: gpk, confidentiality: GHOST_CONFIDENTIALITY });
@@ -1019,7 +1023,7 @@ async function ghostExit(index, row) {
   const say = (m, k = "") => { text(row.querySelector(".meta"), m); if (k) toast(m, k); };
   try {
     const ghost = await deriveGhost(web3, await walletSeed(), index), gpk = ghost.publicKey.toBase58(), owner = ghost.publicKey;
-    const accounts = async () => (await Promise.all(["TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"].map(p =>
+    const accounts = async () => (await Promise.all(TOKEN_PROGRAMS.map(p =>
       connection.getParsedTokenAccountsByOwner(owner, { programId: new web3.PublicKey(p) }).then(r => r.value.map(a => ({ address: a.pubkey.toBase58(), programId: p, lamports: a.account.lamports, mint: a.account.data.parsed.info.mint, raw: BigInt(a.account.data.parsed.info.tokenAmount.amount) }))).catch(() => [])))).flat();
     for (const a of (await accounts()).filter(a => a.raw > 0n && a.mint !== SOL_MINT)) {
       say(`Ghost #${index}: selling ${symbolOf(a.mint)}…`);
@@ -1043,16 +1047,19 @@ async function ghostExit(index, row) {
   } catch (e) { say(errMsg(e), "err"); }
   finally { S.busy = false; renderGhosts(); }
 }
-async function renderGhosts(extra = 3) {
+async function renderGhosts(gap = 5) {
   const list = $("g-list");
   if (!S.wallet) { list.textContent = ""; list.append(make("span", "muted mono", "Connect a wallet to see its ghost wallets.")); return; }
   if (!S.seed) return;
   text($("g-unlock"), "Scan further");
   list.textContent = ""; list.append(make("span", "muted mono", "Scanning ghost wallets…"));
-  const recs = ghostRecords(), top = recs.reduce((m, g) => Math.max(m, g.index), -1) + extra, rows = [];
-  for (let i = 0; i <= top; i++) {
-    const ghost = await deriveGhost(web3, S.seed, i), pk = ghost.publicKey;
-    const [bal, toks] = await Promise.all([connection.getBalance(pk).catch(() => 0), connection.getParsedTokenAccountsByOwner(pk, { programId: new web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }).then(r => r.value).catch(() => [])]);
+  const recs = ghostRecords(), rows = [];
+  const used = await scanGhosts(web3, S.seed, { isUsed: pk => usedOnChain(pk).catch(() => false), known: recs.reduce((m, g) => Math.max(m, g.index), -1), gap });
+  for (const r of recs) if (!used.some(u => u.index === r.index)) used.push({ index: r.index, ghost: await deriveGhost(web3, S.seed, r.index) });
+  used.sort((a, b) => a.index - b.index);
+  for (const { index: i, ghost } of used) {
+    const pk = ghost.publicKey;
+    const [bal, toks] = await Promise.all([connection.getBalance(pk).catch(() => 0), Promise.all(TOKEN_PROGRAMS.map(p => connection.getParsedTokenAccountsByOwner(pk, { programId: new web3.PublicKey(p) }).then(r => r.value).catch(() => []))).then(v => v.flat())]);
     const held = toks.map(a => a.account.data.parsed.info).filter(t => BigInt(t.tokenAmount.amount) > 0n);
     const rec = recs.find(g => g.index === i);
     if (!bal && !held.length && !(rec && rec.state !== "closed")) continue;
@@ -1073,7 +1080,7 @@ async function renderGhosts(extra = 3) {
   }
 }
 $("g-unlock").addEventListener("click", async () => {
-  try { if (!S.wallet && !(await ensureConnected())) return; await walletSeed(); S.ghostScan = (S.ghostScan || 3) + 7; await renderGhosts(S.ghostScan); }
+  try { if (!S.wallet && !(await ensureConnected())) return; await walletSeed(); S.ghostScan = (S.ghostScan || 5) + 10; await renderGhosts(S.ghostScan); }
   catch (e) { toast(errMsg(e), "err"); }
 });
 
