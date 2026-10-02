@@ -33,15 +33,17 @@ export function jupiter({ base = "https://api.jup.ag", apiKey = "", fetch: f = g
       restrictIntermediateTokens: "true",
       maxAccounts: "54" // leaves room in the transaction for the fee transfer
     })}`),
-    instructions: ({ quote, user, priorityMaxLamports }) => call("/swap/v1/swap-instructions", {
+    instructions: ({ quote, user, priorityMaxLamports, priorityLevel = "veryHigh" }) => call("/swap/v1/swap-instructions", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         quoteResponse: quote, userPublicKey: user, wrapAndUnwrapSol: true, dynamicComputeUnitLimit: true,
-        prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: priorityMaxLamports, priorityLevel: "veryHigh" } }
+        prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: priorityMaxLamports, priorityLevel } }
       })
     }),
     search: q => call(`/tokens/v2/search?${new URLSearchParams({ query: q })}`),
+    // token lists: "recent", or a category (toptrending, toptraded, toporganicscore) with an interval (5m, 1h, 6h, 24h)
+    list: (category, interval, limit = 50) => call(category === "recent" ? "/tokens/v2/recent" : `/tokens/v2/${category}/${interval}?${new URLSearchParams({ limit: String(limit) })}`),
     prices: ids => ids.length ? call(`/price/v3?${new URLSearchParams({ ids: ids.slice(0, 50).join(",") })}`) : Promise.resolve({})
   };
 }
@@ -105,7 +107,7 @@ export function buildSwapTx(web3, { parts, user, treasury, fee, side, blockhash,
 }
 
 // Quote, build and return everything the UI needs to show before the user signs.
-export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw, user, treasury, feeBps, slippageBps, priorityMaxLamports }) {
+export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw, user, treasury, feeBps, slippageBps, priorityMaxLamports, priorityLevel }) {
   let quote, fee;
   if (side === "buy") {
     const split = feeOnBuy(amountRaw, feeBps);
@@ -116,7 +118,7 @@ export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw
     quote = await jup.quote({ inputMint: mint, outputMint: SOL_MINT, amount: amountRaw, slippageBps });
     fee = feeOnSell(quote, feeBps);
   }
-  const parts = await jup.instructions({ quote, user, priorityMaxLamports });
+  const parts = await jup.instructions({ quote, user, priorityMaxLamports, priorityLevel });
   const [lookupTables, { blockhash, lastValidBlockHeight }] = await Promise.all([
     Promise.all((parts.addressLookupTableAddresses || []).map(a => connection.getAddressLookupTable(new web3.PublicKey(a)).then(r => r.value))).then(v => v.filter(Boolean)),
     connection.getLatestBlockhash("confirmed")

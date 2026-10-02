@@ -28,6 +28,12 @@ export async function deriveGhost(web3, signature, index) {
   return web3.Keypair.fromSeed(seed);
 }
 
+// The instant trading wallet: same signature, its own derivation path, so it never collides with ghosts.
+export async function deriveInstant(web3, signature) {
+  const seed = await sha256(new Uint8Array([...signature, ...enc.encode("ghostprint/instant/0")]));
+  return web3.Keypair.fromSeed(seed);
+}
+
 /* ---------- 1Click client ---------- */
 export function oneclick({ base = ONECLICK_BASE, jwt = "", fetch: f = globalThis.fetch.bind(globalThis) } = {}) {
   const auth = jwt ? { authorization: `Bearer ${jwt}` } : {};
