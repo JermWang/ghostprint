@@ -159,10 +159,12 @@ export function halftone(parent, { x0, y0, x1, y1, cx, cy, step = 9, max = 2.5, 
   return g;
 }
 // A soft halftone pool behind a finished drawing, sized to its viewBox and kept behind everything.
-export function backdrop(svg, { step = 11, max = 2.1, reach = .44, opacity = .32, squash = 1.6 } = {}) {
+export function backdrop(svg, { step = 11, max = 2.1, reach = .44, opacity = .32 } = {}) {
   const [x, y, w, h] = (svg.getAttribute("viewBox") || "0 0 0 0").split(/\s+/).map(Number);
   if (!w || !h) return null;
-  const g = halftone(svg, { x0: x, y0: y, x1: x + w, y1: y + h, cx: x + w / 2, cy: y + h * .55, step, max, fall: w * reach / (max - .35), squash, opacity, host: svg });
+  // the pool follows the drawing's shape: flattened for wide drawings, stretched for tall (phone) ones
+  const tall = h > w, squash = tall ? .62 : 1.6, fall = (tall ? w * 1.15 : w) * reach / (max - .35);
+  const g = halftone(svg, { x0: x, y0: y, x1: x + w, y1: y + h, cx: x + w / 2, cy: y + h * .55, step, max, fall, squash, opacity, host: svg });
   g.setAttribute("data-anim", "");
   svg.insertBefore(g, svg.firstChild);
   return g;

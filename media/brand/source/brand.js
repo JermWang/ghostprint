@@ -46,7 +46,7 @@ if (k === "pfp") {
   const svg = svgEl("0 0 10 10", "Ghostprint"); root.appendChild(svg);
   Object.assign(svg.style, { position: "absolute", left: "190px", top: "170px", width: "620px", height: "640px" });
   voxelGhost(svg, { u: 10 });
-  fit(svg, { pad: 2 });
+  fit(svg, { pad: 2, dots: false });
 } else {
   Object.assign(root.style, { width: "1500px", height: "500px", background: "radial-gradient(circle at 72% 50%,#EEEFEE,#D6D8D9 60%)" });
   root.innerHTML = '<div class="dots" style="-webkit-mask-image:linear-gradient(90deg,transparent 25%,#000 60%);mask-image:linear-gradient(90deg,transparent 25%,#000 60%)"></div>';
