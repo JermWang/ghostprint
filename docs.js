@@ -1,7 +1,7 @@
 // Docs page: pixel glyphs, isometric icons and diagrams, and a contents list that follows the reader.
 import { renderPixels, renderIcons } from "./art.js";
 import { renderDiagrams } from "./diagrams.js";
-import { TREASURY, FEE_BPS, GHOST_MAX_SOL } from "./config.js";
+import { FEE_BPS, GHOST_MAX_SOL } from "./config.js";
 
 renderPixels(document);
 renderIcons(document);
@@ -18,11 +18,9 @@ document.querySelectorAll(".tbl table").forEach(t => {
 
 // live values from config.js, so the docs never drift from what the terminal does
 document.querySelectorAll("[data-cfg]").forEach(n => {
-  const v = { treasury: TREASURY, fee: `${FEE_BPS / 100}%`, ghostMax: `${GHOST_MAX_SOL} SOL` }[n.dataset.cfg];
+  const v = { fee: `${FEE_BPS / 100}%`, ghostMax: `${GHOST_MAX_SOL} SOL` }[n.dataset.cfg];
   if (v) n.textContent = v;
 });
-const tl = document.getElementById("treasury-link");
-if (tl) tl.href = `https://solscan.io/account/${TREASURY}`;
 
 // highlight the section being read
 const links = new Map([...document.querySelectorAll(".toc a")].map(a => [a.getAttribute("href").slice(1), a]));

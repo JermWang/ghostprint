@@ -7,8 +7,8 @@ import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, 
 import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
 import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint, mergeHistory } from "./market.js";
-import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory } from "./feeds.js";
-import { renderPixels, emblem } from "./art.js";
+import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory, onchainMeta, imageSources, identicon, setMediaProxy } from "./feeds.js";
+import { renderPixels, emblem, pixelSVG, GLYPHS } from "./art.js";
 
 const web3 = window.solanaWeb3;
 const $ = id => document.getElementById(id);
@@ -37,9 +37,31 @@ const solFmt = n => n == null || !isFinite(n) ? "—" : n >= 100 ? n.toFixed(1) 
 const num = n => n == null || !isFinite(n) ? "—" : n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(n < 10 ? 2 : 0);
 const ago = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`; };
 const cls = (el, n) => { el.classList.toggle("up", n > 0); el.classList.toggle("down", n < 0); return el; };
-const BLANK = "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
 const safeUrl = u => typeof u === "string" && /^https:\/\//.test(u) ? u : null;
-const icon = (img, url) => { img.onerror = () => { img.onerror = null; img.src = BLANK; }; img.src = safeUrl(url) || BLANK; img.alt = ""; img.loading = "lazy"; return img; };
+// Token images: a pixel avatar from the mint shows at once; each source (proxy, original, other IPFS
+// gateways, DexScreener) is probed off-screen with a timeout, and the first one that loads replaces it.
+const resolvedImg = new Map();
+const refPolicy = src => PROXY && src.startsWith(PROXY) ? "strict-origin-when-cross-origin" : "no-referrer";
+const showImg = (img, src, real) => { if (!src.startsWith("data:")) img.referrerPolicy = refPolicy(src); img.src = src; img.dataset.real = real ? "1" : "0"; };
+const icon = (img, url, seed) => {
+  const gen = img._g = (img._g || 0) + 1, key = url || seed || "";
+  img.alt = ""; img.decoding = "async"; img.draggable = false;
+  if (resolvedImg.has(key)) { showImg(img, resolvedImg.get(key), true); return img; }
+  if (img.dataset.real !== "1") showImg(img, identicon(seed || url || "?"), false);
+  const list = imageSources(url, { mint: seed });
+  let i = 0;
+  const next = () => {
+    if (img._g !== gen || i >= list.length) return;
+    const src = list[i], first = i++ === 0, probe = new Image();
+    let done = false;
+    const finish = ok => { if (done) return; done = true; clearTimeout(t); if (ok && probe.naturalWidth) { resolvedImg.set(key, src); if (img._g === gen) showImg(img, src, true); } else next(); };
+    const t = setTimeout(() => finish(false), first ? 8000 : 5000);
+    probe.referrerPolicy = refPolicy(src); probe.onload = () => finish(true); probe.onerror = () => finish(false);
+    probe.src = src;
+  };
+  next();
+  return img;
+};
 const link = (href, label, cls) => { const a = make("a", cls, label); a.href = href; a.target = "_blank"; a.rel = "noopener noreferrer"; return a; };
 const solscan = (kind, id) => `https://solscan.io/${kind}/${id}`;
 const rejected = e => e && (e.code === 4001 || /reject|cancel|denied|declined/i.test(e.message || ""));
@@ -69,6 +91,7 @@ const preset = () => settings.presets[settings.preset] || DEFAULTS.presets[0];
 /* ---------- services ---------- */
 // With PROXY_URL set, RPC, Jupiter, NEAR Intents, Jito and X go through the Ghostprint proxy, which holds the keys.
 const PROXY = (PROXY_URL || "").replace(/\/$/, "");
+setMediaProxy(PROXY);
 const rpcUrl = (() => { const v = store.get("ghostprint-rpc-url", null) || (() => { try { return localStorage.getItem("ghostprint-rpc"); } catch (_) { return null; } })(); return typeof v === "string" && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim() : PROXY ? `${PROXY}/rpc` : DEFAULT_RPC; })();
 const connection = new web3.Connection(rpcUrl, "confirmed");
 const jup = jupiter({ base: PROXY ? `${PROXY}/jup` : JUP_BASE, apiKey: PROXY ? "" : JUP_API_KEY, minInterval: PROXY ? 300 : JUP_API_KEY ? 1050 : 2050 });
@@ -99,9 +122,14 @@ async function lookupTokens(mints) {
   if (!need.length) return;
   need.forEach(m => tokenInfo.set(m, null));
   try { const list = await jup.search(need.join(",")); (Array.isArray(list) ? list : []).forEach(t => tokenInfo.set(t.id, t)); } catch (_) {}
+  needMeta(need.filter(m => !tokenInfo.get(m)?.icon));
 }
-const symbolOf = mint => tokenInfo.get(mint)?.symbol || board.tokens.get(mint)?.symbol || short(mint);
-const iconOf = mint => tokenInfo.get(mint)?.icon || board.tokens.get(mint)?.image;
+// Name, image and socials for any token, from wherever they turned up: Jupiter, the Pulse board, or
+// the chain itself (see enrich below).
+const metaStore = new Map();
+const symbolOf = mint => tokenInfo.get(mint)?.symbol || board.tokens.get(mint)?.symbol || metaStore.get(mint)?.symbol || short(mint);
+const iconOf = mint => tokenInfo.get(mint)?.icon || board.tokens.get(mint)?.image || metaStore.get(mint)?.image;
+const infoOf = mint => ({ ...metaStore.get(mint), ...board.tokens.get(mint) });
 
 /* ---------- brand and art ---------- */
 renderPixels(document, { assembleWord: false });
@@ -253,6 +281,65 @@ function route() {
 }
 addEventListener("hashchange", route);
 
+/* ---------- icons and token links ---------- */
+// Small line icons (16×16, currentColor) for links and stats. Static markup, never built from data.
+const ICO = {
+  x: '<path d="M3 2.5h3l7 11h-3z" fill="currentColor" stroke="none"/><path d="M13 2.5 3.2 13.5"/>',
+  tg: '<path d="M14 2.6 1.9 7.4l4 1.3 1.5 4.6 2.2-2.5 3.4 2.5z"/><path d="M5.9 8.7 12 4.9"/>',
+  web: '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2.3 2.2 2.3 9.8 0 12M8 2c-2.3 2.2-2.3 9.8 0 12"/>',
+  pump: '<g transform="rotate(-38 8 8)"><rect x="2" y="5.3" width="12" height="5.4" rx="2.7"/><path d="M8 5.3v5.4"/></g>',
+  dex: '<path d="M2.5 13.5h11"/><path d="M4.5 11V7.5M8 11V3.5M11.5 11V6"/>',
+  eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
+  scan: '<circle cx="7" cy="7" r="4.5"/><path d="m10.4 10.4 3.6 3.6"/>',
+  search: '<circle cx="7" cy="7" r="4.5"/><path d="m10.4 10.4 3.6 3.6M5 7h4"/>',
+  copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M3 10.5v-7a1 1 0 0 1 1-1h7"/>',
+  check: '<path d="m3 8.5 3 3 7-7"/>',
+  users: '<circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 13.5c.5-2.5 2.3-4 4.5-4s4 1.5 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12 9.8c1.3.6 2.2 1.9 2.5 3.7"/>',
+  drop: '<path d="M8 2s4.5 4.8 4.5 8A4.5 4.5 0 0 1 3.5 10C3.5 6.8 8 2 8 2z"/>',
+  bars: '<path d="M2.5 13.5h11M4.5 11V8M8 11V5M11.5 11V9"/>',
+  crown: '<path d="m2.5 12 1-7 3 3L8 3.5 9.5 8l3-3 1 7z"/>',
+  dev: '<rect x="2.5" y="3" width="11" height="8" rx="1.5"/><path d="M6 14h4M8 11v3M5.5 6 7 7.3 5.5 8.6"/>'
+};
+const svgIcon = (name, cls) => { const e = document.createElementNS("http://www.w3.org/2000/svg", "svg"); e.setAttribute("viewBox", "0 0 16 16"); e.setAttribute("aria-hidden", "true"); e.setAttribute("class", `ico${cls ? " " + cls : ""}`); e.innerHTML = ICO[name]; return e; };
+// Every place a token lives: its own socials first, then the explorers.
+function tokenLinks(mint, info = {}) {
+  const out = [];
+  if (info.twitter) out.push({ k: "x", label: "X", href: info.twitter, social: true });
+  if (info.telegram) out.push({ k: "tg", label: "Telegram", href: info.telegram, social: true });
+  if (info.website) out.push({ k: "web", label: "Website", href: info.website, social: true });
+  if (isPumpMint(mint, info.launchpad) || info.pump) out.push({ k: "pump", label: "pump.fun", href: `https://pump.fun/coin/${mint}` });
+  out.push({ k: "dex", label: "DexScreener", href: `https://dexscreener.com/solana/${mint}` });
+  out.push({ k: "eye", label: "Birdeye", href: `https://birdeye.so/token/${mint}?chain=solana` });
+  out.push({ k: "scan", label: "Solscan", href: solscan("token", mint) });
+  out.push({ k: "search", label: "Search X", href: `https://x.com/search?q=${encodeURIComponent(mint)}&f=live` });
+  return out.filter(l => /^https:\/\//.test(l.href));
+}
+function linkBtn(l, withLabel) {
+  const a = link(l.href, "", `lk lk-${l.k}${l.social ? " soc" : ""}`); a.title = l.label; a.setAttribute("aria-label", l.label);
+  a.append(svgIcon(l.k)); if (withLabel) a.append(make("span", "", l.label));
+  a.addEventListener("click", e => e.stopPropagation());
+  return a;
+}
+function copyBtn(mint, withLabel) {
+  const b = make("button", "lk lk-copy"); b.type = "button"; b.title = "Copy contract address"; b.setAttribute("aria-label", "Copy contract address");
+  b.append(svgIcon("copy")); if (withLabel) b.append(make("span", "", `${mint.slice(0, 4)}…${mint.slice(-4)}`));
+  b.addEventListener("click", async e => {
+    e.preventDefault(); e.stopPropagation();
+    try { await navigator.clipboard.writeText(mint); b.classList.add("done"); b.firstChild.replaceWith(svgIcon("check")); setTimeout(() => { b.classList.remove("done"); b.firstChild.replaceWith(svgIcon("copy")); }, 1400); } catch (_) { toast("Couldn't reach the clipboard.", "err"); }
+  });
+  return b;
+}
+// Avatar with the bonding curve drawn as a ring around it.
+function avatar(cls) { const d = make("div", `av${cls ? " " + cls : ""}`); d.append(make("img", "tok-icon"), make("span", "av-badge")); return d; }
+function setRing(av, t, column) {
+  const migrated = column === "migrated" || t.complete || t.graduatedAt || t.migratedAt;
+  const p = migrated ? 100 : t.pump && t.progress != null ? Math.max(0, Math.min(100, t.progress)) : null;
+  av.style.setProperty("--p", p ?? 0);
+  av.classList.toggle("ring", p != null); av.classList.toggle("hot", p != null && p >= 80 && !migrated); av.classList.toggle("grad", !!migrated);
+  const badge = av.querySelector(".av-badge"); badge.textContent = migrated ? "✓" : ""; badge.hidden = !migrated;
+  av.title = migrated ? "Migrated to an AMM pool" : p != null ? `Bonding curve ${p.toFixed(1)}%` : "";
+}
+
 /* ---------- Pulse ---------- */
 const board = createBoard({ finalStretch: settings.finalStretch });
 const filters = store.get("ghostprint-pulse-filters", { new: {}, final: {}, migrated: {} });
@@ -272,7 +359,7 @@ const pp = pumpPortal({
   onNewToken: m => {
     const t = board.upsert(fromPumpPortal(m, S.solUsd));
     t.fresh = true; pulseDirty = true;
-    metadata(m.uri).then(meta => { if (meta) { board.upsert({ mint: m.mint, ...meta }); pulseDirty = true; } });
+    metadata(m.uri).then(meta => applyMeta(m.mint, meta));
   },
   onMigration: m => {
     fireSnipe(m.mint);
@@ -282,6 +369,39 @@ const pp = pumpPortal({
     if (watched) toast(`${symbolOf(m.mint)} migrated to ${m.pool || "an AMM"}.`, "info");
   }
 });
+/* ---------- token metadata ---------- */
+// Tokens that reach the terminal without a name or image (migrations, pasted mints, tokens Jupiter
+// hasn't indexed yet) get them from the chain: metadata account → URI → JSON. Visible tokens first,
+// at most one batch every 3 seconds, and a failed token is retried after 90 seconds.
+const metaWant = new Set(), metaTried = new Map();
+const needMeta = mints => { for (const m of mints) if (m && isAddress(m)) metaWant.add(m); };
+const hasMeta = m => !!iconOf(m) && symbolOf(m) !== short(m);
+function applyMeta(mint, m) {
+  if (!m) return;
+  const got = Object.fromEntries(Object.entries(m).filter(([, v]) => v != null && v !== ""));
+  if (!Object.keys(got).length) return;
+  metaStore.set(mint, { ...got, ...metaStore.get(mint), ...(got.image ? { image: got.image } : {}) });
+  const cur = board.tokens.get(mint);
+  if (cur) { board.upsert({ mint, ...Object.fromEntries(Object.entries(got).filter(([k]) => cur[k] == null || cur[k] === "")) }); pulseDirty = true; }
+  if (S.route === "token" && S.tokenMint === mint) renderTokenHead();
+}
+async function enrich() {
+  try {
+    if (S.route === "pulse") { const c = board.columns(); needMeta([...c.new, ...c.final, ...c.migrated].filter(t => !t.image || !t.symbol).map(t => t.mint)); }
+    const now = Date.now();
+    const due = [...metaWant].filter(m => !hasMeta(m) && now - (metaTried.get(m) || 0) > 90_000).slice(0, 100);
+    metaWant.clear();
+    due.forEach(m => metaTried.set(m, now));
+    const bare = [];
+    for (const m of due) { const uri = infoOf(m).uri; if (uri) metadata(uri).then(meta => applyMeta(m, meta)); else bare.push(m); }
+    if (bare.length) {
+      const found = await onchainMeta({ connection, web3, mints: bare });
+      for (const [m, d] of found) { applyMeta(m, { name: d.name, symbol: d.symbol, uri: d.uri }); if (d.uri) metadata(d.uri).then(meta => applyMeta(m, meta)); }
+    }
+  } catch (_) {}
+  setTimeout(enrich, 3000);
+}
+
 function setStatusChip(el, s, label) {
   el.textContent = ""; const d = make("span", "dot"); d.classList.toggle("live", s === "live"); d.classList.toggle("warn", s !== "live"); el.append(d, `${label}${s === "live" ? "" : ` · ${s}`}`);
 }
@@ -330,44 +450,46 @@ function tickAges() { document.querySelectorAll("#v-pulse .pcard").forEach(el =>
 
 function buildCard(t) {
   const a = make("a", "pcard"); a.href = `#/token/${t.mint}`; a.dataset.mint = t.mint;
-  const img = icon(make("img", "tok-icon"), t.image);
-  const main = make("div"), top = make("div", "pc-top"), meta = make("div", "pc-meta"), bar = make("div", "pbar");
+  const av = avatar(); icon(av.querySelector("img"), t.image, t.mint);
+  const main = make("div", "pc-main"), top = make("div", "pc-top"), stats = make("div", "pc-stats"), links = make("div", "pc-links");
   top.append(make("b"), make("span", "nm"), make("span", "age"));
-  bar.append(make("i"));
-  main.append(top, meta, bar);
+  main.append(top, stats, links);
   const qb = make("button", "qb"); qb.type = "button";
   qb.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); quickBuy(t.mint, qb); });
   const sn = make("button", "snipe", "🎯"); sn.type = "button";
   sn.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); toggleSnipe(t.mint); });
-  const acts = make("div", "pc-acts"); acts.append(sn, qb);
-  a.append(img, main, acts);
+  const acts = make("div", "pc-acts"); acts.append(qb, sn);
+  a.append(av, main, acts);
   if (t.fresh && !REDUCE) a.classList.add("fresh");
   return a;
 }
+const stat = (ico, v, title, cl) => { const s = make("span", `st${cl ? " " + cl : ""}`); s.title = title; s.append(svgIcon(ico), make("b", "", v)); return s; };
 function updateCard(el, t) {
-  const img = el.querySelector("img");
-  if (t.image && img.dataset.src !== t.image) { img.dataset.src = t.image; icon(img, t.image); }
+  const img = el.querySelector("img"), column = board.column(t);
+  if (t.image && img.dataset.src !== t.image) { img.dataset.src = t.image; icon(img, t.image, t.mint); }
+  setRing(el.querySelector(".av"), t, column);
   text(el.querySelector(".pc-top b"), t.symbol || short(t.mint));
   text(el.querySelector(".nm"), t.name || "");
-  text(el.querySelector(".age"), ago(Date.now() - (t.createdAt || t.firstSeen)));
-  const meta = el.querySelector(".pc-meta"); meta.textContent = "";
-  const add = (k, v) => { if (v == null || v === "—") return; const s = make("span"); s.append(`${k} `, make("b", "", v)); meta.append(s); };
-  add("MC", usd(t.mcapUsd ?? (t.mcapSol && S.solUsd ? t.mcapSol * S.solUsd : null)));
-  if (t.liquidityUsd) add("L", usd(t.liquidityUsd));
-  if (t.holders) add("H", num(t.holders));
-  if (t.topHoldersPct != null) add("T10", `${t.topHoldersPct.toFixed(0)}%`);
-  if (t.creator) add("dev", t.creator.slice(0, 4));
-  const soc = make("span", "soc");
-  for (const [k, u] of [["𝕏", t.twitter], ["TG", t.telegram], ["WEB", t.website]]) { const href = safeUrl(u); if (href) { const l = link(href, k); l.addEventListener("click", e => e.stopPropagation()); soc.append(l); } }
-  if (soc.childElementCount) meta.append(soc);
-  const bar = el.querySelector(".pbar"), migrated = board.column(t) === "migrated";
-  bar.hidden = !t.pump || migrated || t.progress == null;
-  bar.classList.toggle("hot", (t.progress ?? 0) >= 80);
-  bar.firstChild.style.width = `${Math.min(100, t.progress ?? 0)}%`;
-  bar.title = t.progress != null ? `Bonding curve ${t.progress.toFixed(1)}%` : "";
+  const age = Date.now() - (t.createdAt || t.firstSeen), ageEl = el.querySelector(".age");
+  text(ageEl, ago(age)); ageEl.classList.toggle("new", age < 60_000);
+  const stats = el.querySelector(".pc-stats"); stats.textContent = "";
+  const mc = t.mcapUsd ?? (t.mcapSol && S.solUsd ? t.mcapSol * S.solUsd : null);
+  stats.append(make("span", "mc", mc != null ? usd(mc) : "—"));
+  if (t.volume24h) stats.append(stat("bars", usd(t.volume24h), "Volume 24h"));
+  else if (t.liquidityUsd) stats.append(stat("drop", usd(t.liquidityUsd), "Liquidity"));
+  if (t.holders) stats.append(stat("users", num(t.holders), "Holders"));
+  if (t.topHoldersPct != null) stats.append(stat("crown", `${t.topHoldersPct.toFixed(0)}%`, "Top 10 holders", t.topHoldersPct > 30 ? "warn" : ""));
+  if (t.devPct != null) stats.append(stat("dev", `${t.devPct.toFixed(1)}%`, "Dev holds", t.devPct > 5 ? "warn" : ""));
+  else if (t.pump && t.progress != null && column !== "migrated") stats.append(make("span", `curve${t.progress >= 80 ? " hot" : ""}`, `${t.progress.toFixed(0)}%`));
+  const links = el.querySelector(".pc-links"), sig = [t.twitter, t.telegram, t.website, t.pump].join("|");
+  if (links.dataset.sig !== sig) {
+    links.dataset.sig = sig; links.textContent = "";
+    tokenLinks(t.mint, t).filter(l => l.social || l.k === "pump" || l.k === "dex").forEach(l => links.append(linkBtn(l)));
+    links.append(copyBtn(t.mint));
+  }
   text(el.querySelector(".qb"), `⚡ ${$("qbamt").value || settings.quickBuy}`);
   const sn = el.querySelector(".snipe"), armed = snipes().some(x => x.mint === t.mint && x.status === "armed");
-  sn.hidden = migrated; sn.setAttribute("aria-pressed", armed);
+  sn.hidden = column === "migrated"; sn.setAttribute("aria-pressed", armed);
   sn.title = armed ? "Sniping: buys from your instant wallet the moment this migrates. Click to cancel." : "Snipe the migration: buy from your instant wallet the moment this token migrates";
 }
 document.querySelectorAll(".pcol").forEach(col => {
@@ -404,7 +526,7 @@ async function loadTrending() {
     table.append(head);
     rows.forEach((t, i) => {
       const st = t[statKey] || {}, tr = make("tr", "pick"), tok = make("td"), wrap = make("div", "cell-tok");
-      wrap.append(icon(make("img", "tok-icon"), t.icon), make("b", "", t.symbol || short(t.id)), make("span", "muted", (t.name || "").slice(0, 18)));
+      wrap.append(icon(make("img", "tok-icon"), t.icon, t.id), make("b", "", t.symbol || short(t.id)), make("span", "muted", (t.name || "").slice(0, 18)));
       tok.append(wrap);
       const chg = make("td", "num", pct(st.priceChange)); cls(chg, st.priceChange);
       const age = Date.parse(t.firstPool?.createdAt || "");
@@ -433,7 +555,9 @@ async function openToken(mint) {
   T.trades = []; T.tokenBal = null; T.decimals = null; T.info = null; T.curve = null; T.priceUsd = null; T.holders = null;
   $("amt").value = ""; $("quote").hidden = true; setTradeStatus("");
   const b = board.tokens.get(mint) || {};
-  text($("t-sym"), b.symbol || short(mint)); text($("t-name"), b.name || ""); text($("t-mint"), `${short(mint)} ⧉`); icon($("t-icon"), b.image);
+  $("t-icon").dataset.real = "0"; $("t-links").textContent = ""; $("t-desc").hidden = true; $("t-age").hidden = true; $("t-curve").hidden = true;
+  $("t-ca").textContent = ""; $("t-ca").append(copyBtn(mint, true));
+  renderTokenHead();
   ["s-price", "s-mcap", "s-liq", "s-vol", "s-c5", "s-c1", "s-c24"].forEach(id => cls(text($(id), "—"), 0));
   $("chart").textContent = ""; $("chart").append(make("div", "empty", "Loading chart…"));
   $("curvebar").hidden = true;
@@ -441,6 +565,7 @@ async function openToken(mint) {
   $("audit").textContent = ""; $("audit").append(make("h3", "", "Token info"), make("span", "muted", "Loading…"));
   document.title = `${b.symbol || short(mint)} · Ghostprint`;
 
+  if (!hasMeta(mint)) { metaTried.delete(mint); needMeta([mint]); }
   decimalsOf(mint).then(d => { T.decimals = d; renderTradePanel(); }).catch(e => setTradeStatus(errMsg(e), "err"));
   jup.search(mint).then(l => { const t = (l || []).find(x => x.id === mint); if (t && S.tokenMint === mint) { tokenInfo.set(mint, t); T.info = t; renderTokenHead(); renderAudit(); } else renderAudit(); }).catch(() => renderAudit());
   loadPairs(mint);
@@ -457,15 +582,19 @@ async function openToken(mint) {
 leaveToken = () => { T.sub?.close(); T.sub = null; clearTimeout(T.curveTimer); clearInterval(T.statsTimer); clearTimeout(T.quoteTimer); };
 
 function renderTokenHead() {
-  const t = T.info, b = board.tokens.get(S.tokenMint) || {};
-  const sym = t?.symbol || b.symbol || short(S.tokenMint);
-  text($("t-sym"), sym); text($("t-name"), t?.name || b.name || ""); icon($("t-icon"), t?.icon || b.image);
+  const mint = S.tokenMint, t = T.info, b = infoOf(mint);
+  const sym = t?.symbol || b.symbol || short(mint);
+  text($("t-sym"), sym); text($("t-name"), t?.name || b.name || "");
+  icon($("t-icon"), t?.icon || b.image, mint);
+  setRing($("t-av"), { ...b, pump: b.pump || isPumpMint(mint, t?.launchpad), progress: T.curve ? T.curve.progress : b.progress, complete: T.curve?.complete || b.complete || !!t?.graduatedPool }, b.migratedAt || t?.graduatedPool ? "migrated" : "");
   document.title = `${sym} · Ghostprint`;
-  const links = $("t-links"); links.textContent = "";
-  const soc = { twitter: t?.twitter || b.twitter, telegram: t?.telegram || b.telegram, website: t?.website || b.website };
-  for (const [k, u] of [["𝕏", soc.twitter], ["TG", soc.telegram], ["Web", soc.website]]) { const h = safeUrl(u); if (h) links.append(link(h, k), " "); }
-  links.append(link(solscan("token", S.tokenMint), "Solscan"), " ", link(`https://dexscreener.com/solana/${S.tokenMint}`, "DEX"));
-  if (isPumpMint(S.tokenMint, t?.launchpad)) links.append(" ", link(`https://pump.fun/coin/${S.tokenMint}`, "pump"));
+  const soc = { twitter: t?.twitter || b.twitter, telegram: t?.telegram || b.telegram, website: t?.website || b.website, launchpad: t?.launchpad, pump: b.pump };
+  const links = $("t-links"), sig = JSON.stringify(soc);
+  if (links.dataset.sig !== sig || !links.childElementCount) { links.dataset.sig = sig; links.textContent = ""; tokenLinks(mint, soc).forEach(l => links.append(linkBtn(l, true))); }
+  const desc = b.description;
+  $("t-desc").hidden = !desc; if (desc) text($("t-desc"), desc);
+  const created = Date.parse(t?.firstPool?.createdAt || "") || b.createdAt;
+  $("t-age").hidden = !created; if (created) text($("t-age"), `${ago(Date.now() - created)} old`);
   if (t) {
     if (t.usdPrice) T.priceUsd = t.usdPrice;
     text($("s-price"), price(t.usdPrice)); text($("s-mcap"), usd(t.mcap ?? t.fdv)); text($("s-liq"), usd(t.liquidity));
@@ -503,6 +632,8 @@ async function curveTick(mint) {
       $("curvebar").querySelector("i").style.width = `${c.progress}%`;
       $("curvebar").querySelector(".pbar").classList.toggle("hot", c.progress >= 80);
       text($("curvepct"), c.complete ? "Complete · migrating" : `${c.progress.toFixed(1)}% · ${solFmt(Number(c.realSolReserves) / 1e9)} SOL in curve`);
+      $("t-curve").hidden = false; text($("t-curve"), c.complete ? "Curve complete" : `Curve ${c.progress.toFixed(0)}%`);
+      setRing($("t-av"), { pump: true, progress: c.progress, complete: c.complete }, c.complete ? "migrated" : "");
       if (S.solUsd) { T.priceUsd = c.priceSol * S.solUsd; text($("s-mcap"), usd(c.mcapSol * S.solUsd)); text($("s-price"), price(T.priceUsd)); }
       renderAudit();
       if (c.complete) return;
@@ -571,19 +702,32 @@ function tradeTable(list) {
   return table;
 }
 function renderAudit() {
-  const a = $("audit"), t = T.info, b = board.tokens.get(S.tokenMint) || {}, h = T.holders, c = T.curve;
+  const a = $("audit"), t = T.info, b = infoOf(S.tokenMint), h = T.holders, c = T.curve;
   a.textContent = ""; a.append(make("h3", "", "Token info"));
-  const row = (k, v, cl) => { const r = make("div", "row"); r.append(make("span", "k", k), make("span", cl || "", v)); a.append(r); };
+  // authorities as two badges
   const mintOff = h ? !h.mintAuthority : t?.audit?.mintAuthorityDisabled, freezeOff = h ? !h.freezeAuthority : t?.audit?.freezeAuthorityDisabled;
-  row("Mint authority", mintOff == null ? "—" : mintOff ? "Revoked ✓" : "Active ⚠", mintOff == null ? "" : mintOff ? "up" : "down");
-  row("Freeze authority", freezeOff == null ? "—" : freezeOff ? "Revoked ✓" : "Active ⚠", freezeOff == null ? "" : freezeOff ? "up" : "down");
+  const badges = make("div", "badges");
+  for (const [k, off] of [["Mint", mintOff], ["Freeze", freezeOff]]) {
+    const s2 = make("span", `badge ${off == null ? "" : off ? "ok" : "bad"}`); s2.append(svgIcon(off ? "check" : "dev"), make("span", "", `${k} ${off == null ? "unknown" : off ? "revoked" : "active"}`));
+    s2.title = off == null ? "Not read yet" : off ? `${k} authority is revoked: nobody can ${k === "Mint" ? "mint more tokens" : "freeze your tokens"}.` : `${k} authority is active: the owner can ${k === "Mint" ? "mint more tokens" : "freeze holders' tokens"}.`;
+    badges.append(s2);
+  }
+  a.append(badges);
+  // meters: share held by the top 10 and the dev, and the bonding curve
+  const meter = (label, pctv, note, warnAt) => {
+    const m = make("div", "meter"), row = make("div", "mrow"), bar = make("div", "mbar"), fill = make("i");
+    row.append(make("span", "k", label), make("b", pctv != null && warnAt != null && pctv > warnAt ? "warnc" : "", pctv != null ? `${pctv.toFixed(pctv < 10 ? 2 : 1)}%` : note));
+    fill.style.width = `${Math.max(0, Math.min(100, pctv ?? 0))}%`; if (warnAt != null && pctv > warnAt) fill.className = "warn";
+    bar.append(fill); m.append(row, bar); a.append(m);
+  };
   const top10 = h ? h.top10 : t?.audit?.topHoldersPercentage;
-  row("Top 10 holders", top10 != null ? `${top10.toFixed(1)}%` : "Open Holders", top10 > 30 ? "warnc" : "");
+  meter("Top 10 holders", top10, "open Holders", 30);
   const dev = h && h.devPct ? h.devPct : t?.audit?.devBalancePercentage;
-  if (dev != null) row("Dev holds", `${dev.toFixed(2)}%`, dev > 5 ? "warnc" : "");
+  if (dev != null) meter("Dev holds", dev, "", 5);
+  if (c) meter("Bonding curve", c.complete ? 100 : c.progress, "", null);
+  const row = (k, v, cl) => { const r = make("div", "row"); r.append(make("span", "k", k), make("span", cl || "", v)); a.append(r); };
   if (t?.holderCount) row("Holders", num(t.holderCount));
   if (t?.organicScore != null) row("Organic score", `${t.organicScore.toFixed(0)} ${t.organicScoreLabel || ""}`);
-  if (c) row("Bonding curve", c.complete ? "Complete" : `${c.progress.toFixed(1)}%`);
   const created = Date.parse(t?.firstPool?.createdAt || "") || b.createdAt;
   if (created) row("Age", ago(Date.now() - created));
   const creator = t?.dev || b.creator;
@@ -597,8 +741,6 @@ function renderAudit() {
     });
     r.append(make("span", "k", "Dev wallet"), v); a.append(r);
   }
-  const desc = b.description;
-  if (desc) a.append(make("p", "", desc));
 }
 function selectTokenTab(id) {
   document.querySelectorAll("#v-token .tok-main [role=tab]").forEach(t => { const on = t.id === id; t.setAttribute("aria-selected", on); $(t.getAttribute("aria-controls")).hidden = !on; });
@@ -611,7 +753,6 @@ document.querySelectorAll("#orders [role=tab]").forEach(t => t.addEventListener(
   document.querySelectorAll("#orders [role=tab]").forEach(o => { const on = o === t; o.setAttribute("aria-selected", on); $(o.getAttribute("aria-controls")).hidden = !on; });
   if (t.id === "ot-auto") renderAutoList(); else loadTokenOrders();
 }));
-$("t-mint").addEventListener("click", async () => { try { await navigator.clipboard.writeText(S.tokenMint); toast("Mint address copied.", "ok"); } catch (_) {} });
 
 /* ---------- trade panel ---------- */
 const amt = $("amt");
@@ -1141,7 +1282,7 @@ function renderFeed() {
   const head = make("tr"); ["Age", "Wallet", "Type", "Token", "SOL", "Tokens", "", ""].forEach((h, i) => head.append(make("th", i > 3 && i < 6 ? "num" : "", h))); table.append(head);
   for (const s of feed) {
     const tr = make("tr", `trade-${s.side}${s.fresh ? " newrow" : ""}`); s.fresh = false;
-    const tok = make("td"), wrap = make("a", "cell-tok"); wrap.href = `#/token/${s.mint}`; wrap.append(icon(make("img", "tok-icon"), iconOf(s.mint)), make("span", "", symbolOf(s.mint))); tok.append(wrap);
+    const tok = make("td"), wrap = make("a", "cell-tok"); wrap.href = `#/token/${s.mint}`; wrap.append(icon(make("img", "tok-icon"), iconOf(s.mint), s.mint), make("span", "", symbolOf(s.mint))); tok.append(wrap);
     const qbtd = make("td", "num"), qb = make("button", "qb", `⚡ ${$("qbamt").value || settings.quickBuy}`); qb.type = "button"; qb.addEventListener("click", () => quickBuy(s.mint, qb)); qbtd.append(qb);
     const tx = make("td", "num"); tx.append(link(solscan("tx", s.sig), "↗"));
     tr.append(make("td", "muted", s.time ? ago(Date.now() - s.time * 1000) : "—"), make("td", "", s.label), make("td", "side", s.side === "buy" ? "Buy" : "Sell"), tok, make("td", "num", solFmt(s.sol)), make("td", "num", num(s.tokens)), qbtd, tx);
@@ -1153,12 +1294,22 @@ $("tk-form").addEventListener("submit", e => { e.preventDefault(); addTracked($(
 /* ---------- Portfolio ---------- */
 let pfWallet = "main";
 let pfRun = 0;
+// Allocation colours: the art palette, so the dashboard matches the drawings.
+const ALLOC = ["#9A9EA5", "#FF5A24", "#4FD18B", "#F2C14E", "#7FB2FF", "#C792EA", "#EEEFEE", "#5F646B"];
+// A PnL value with a small bar under it, scaled to the biggest win or loss in the table.
+function pnlCell(v, max) {
+  const td = make("td", "num pnl");
+  if (v == null || !isFinite(v)) { td.textContent = "—"; return td; }
+  const val = cls(make("span", "", `${v >= 0 ? "+" : ""}${solFmt(v)}`), v), bar = make("span", `pb ${v >= 0 ? "pos" : "neg"}`);
+  bar.style.width = `${Math.max(4, Math.min(100, Math.abs(v) / max * 100))}%`;
+  td.append(val, bar); return td;
+}
 async function renderPortfolio() {
   const run = ++pfRun, stale = () => run !== pfRun;
   const cards = $("pf-cards"), table = $("pf-table"), act = $("pf-act");
   $("pf-wallet").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === pfWallet));
   cards.textContent = ""; table.textContent = ""; act.textContent = "";
-  const card = (k, v, c) => { const d = make("div", "panel card"); d.append(make("div", "k", k), cls(make("div", "v", v), c)); cards.append(d); };
+  const card = (k, v, c, glyph = "key") => { const d = make("div", "panel card"), g = pixelSVG(GLYPHS[glyph], "cg"), body = make("div"); body.append(make("div", "k", k), cls(make("div", "v", v), c)); d.append(g, body); cards.append(d); };
   if (!S.wallet) { card("Wallet", "Not connected"); emptyRow(table, "Connect a wallet to see positions.", "ghost"); renderGhosts(); renderPfOrders(); return; }
   const pk = pfWallet === "instant" ? S.instant?.pk : S.wallet.pk;
   if (!pk) { card("Instant wallet", "Locked"); const tr = table.insertRow(), td = make("td", "tdempty"); const b = make("button", "btn small primary", "Unlock instant wallet"); b.type = "button"; b.addEventListener("click", async () => { try { await instantWallet(); renderPortfolio(); } catch (e) { toast(errMsg(e), "err"); } }); td.append(b); tr.append(td); renderGhosts(); renderPfOrders(); return; }
@@ -1183,15 +1334,32 @@ async function renderPortfolio() {
         .filter(r => r.onchain > 0 || r.realized).sort((a, b) => (b.value ?? 0) - (a.value ?? 0) || b.onchain - a.onchain);
       const total = all.reduce((n, r) => n + (r.value || 0), 0), unreal = all.reduce((n, r) => n + (r.unrealized || 0), 0), real = all.reduce((n, r) => n + (r.realized || 0), 0);
       cards.textContent = "";
-      card(`${pfWallet === "instant" ? "Instant" : "Main"} SOL`, `${solFmt(bal / 1e9)} SOL`);
-      card("Positions value", priced ? `${solFmt(total)} SOL${solUsd ? ` · ${usd(total * solUsd)}` : ""}` : "pricing…");
-      card("Unrealized PnL", priced ? `${unreal >= 0 ? "+" : ""}${solFmt(unreal)} SOL` : "…", priced ? unreal : 0);
-      card("Realized PnL", `${real >= 0 ? "+" : ""}${solFmt(real)} SOL`, real);
+      card(`${pfWallet === "instant" ? "Instant" : "Main"} SOL`, `${solFmt(bal / 1e9)} SOL`, 0, pfWallet === "instant" ? "bolt" : "key");
+      card("Positions value", priced ? `${solFmt(total)} SOL${solUsd ? ` · ${usd(total * solUsd)}` : ""}` : "pricing…", 0, "stack");
+      card("Unrealized PnL", priced ? `${unreal >= 0 ? "+" : ""}${solFmt(unreal)} SOL` : "…", priced ? unreal : 0, "chart");
+      card("Realized PnL", `${real >= 0 ? "+" : ""}${solFmt(real)} SOL`, real, "target");
+      // where the SOL sits: wallet balance plus each position, as one bar
+      const parts = [{ label: "SOL", v: bal / 1e9, mint: null }, ...all.filter(r => r.value > 0).map(r => ({ label: symbolOf(r.mint), v: r.value, mint: r.mint }))];
+      const sum = parts.reduce((n, x) => n + x.v, 0);
+      if (priced && sum > 0 && parts.length > 1) {
+        const box = make("div", "panel alloc"), bar = make("div", "abar"), legend = make("div", "alegend");
+        box.append(make("div", "k", "Allocation"), bar, legend);
+        const shown = parts.slice(0, 7), rest = parts.slice(7).reduce((n, x) => n + x.v, 0);
+        if (rest > 0) shown.push({ label: "Other", v: rest, mint: null });
+        shown.forEach((x, i) => {
+          const share = x.v / sum * 100, seg = make("i"); seg.style.width = `${share}%`; seg.style.background = ALLOC[i % ALLOC.length]; seg.title = `${x.label} ${share.toFixed(1)}%`; bar.append(seg);
+          const li = make("span", "ali"), sw = make("i"); sw.style.background = ALLOC[i % ALLOC.length];
+          li.append(sw); if (x.mint) li.append(icon(make("img", "tok-icon"), iconOf(x.mint), x.mint));
+          li.append(make("b", "", x.label), make("span", "muted", `${share.toFixed(share < 10 || share > 99 ? 1 : 0)}%`)); legend.append(li);
+        });
+        cards.append(box);
+      }
       table.textContent = "";
       const head = make("tr"); ["Token", "Holding", "Value", "Avg cost", "Unrealized", "Realized", "Sell"].forEach((h, i) => head.append(make("th", i ? "num" : "", h))); table.append(head);
       if (!all.length) emptyRow(table, "No positions yet.", "ghost");
+      const pnlMax = Math.max(1e-9, ...all.flatMap(r => [Math.abs(r.unrealized || 0), Math.abs(r.realized || 0)]));
       for (const r of all) {
-        const tr = make("tr"), tok = make("td"), a = make("a", "cell-tok"); a.href = `#/token/${r.mint}`; a.append(icon(make("img", "tok-icon"), iconOf(r.mint)), make("b", "", symbolOf(r.mint))); tok.append(a);
+        const tr = make("tr"), tok = make("td"), a = make("a", "cell-tok"); a.href = `#/token/${r.mint}`; a.append(icon(make("img", "tok-icon"), iconOf(r.mint), r.mint), make("b", "", symbolOf(r.mint))); tok.append(a);
         const sells = make("td", "num");
         for (const pctv of [50, 100]) {
           const b = make("button", "btn small", `${pctv}%`); b.type = "button";
@@ -1208,7 +1376,7 @@ async function renderPortfolio() {
           });
           sells.append(b, " ");
         }
-        tr.append(tok, make("td", "num", num(r.onchain)), make("td", "num", r.value != null ? `${solFmt(r.value)} SOL` : priced ? "—" : "…"), make("td", "num", r.avg ? price(r.avg * solUsd) : "—"), cls(make("td", "num", r.unrealized != null ? `${r.unrealized >= 0 ? "+" : ""}${solFmt(r.unrealized)}` : "—"), r.unrealized), cls(make("td", "num", r.realized ? `${r.realized >= 0 ? "+" : ""}${solFmt(r.realized)}` : "—"), r.realized), sells);
+        tr.append(tok, make("td", "num", num(r.onchain)), make("td", "num", r.value != null ? `${solFmt(r.value)} SOL` : priced ? "—" : "…"), make("td", "num", r.avg ? price(r.avg * solUsd) : "—"), pnlCell(r.unrealized, pnlMax), pnlCell(r.realized || null, pnlMax), sells);
         table.append(tr);
       }
     };
@@ -1284,11 +1452,11 @@ function renderWatchbar() {
   for (const w of l) {
     const a = make("a"); a.href = `#/token/${w.mint}`;
     const p = watchPrices[w.mint];
-    a.append(icon(make("img"), w.icon), make("b", "", w.symbol || short(w.mint)), make("span", "", p ? price(p.usdPrice) : ""), cls(make("span", "", p?.priceChange24h != null ? pct(p.priceChange24h) : ""), p?.priceChange24h));
+    a.append(icon(make("img"), w.icon || iconOf(w.mint), w.mint), make("b", "", w.symbol || short(w.mint)), make("span", "", p ? price(p.usdPrice) : ""), cls(make("span", "", p?.priceChange24h != null ? pct(p.priceChange24h) : ""), p?.priceChange24h));
     bar.append(a);
   }
 }
-async function refreshWatch() { const l = watchlist(); if (l.length) { try { watchPrices = await jup.prices(l.map(w => w.mint)); } catch (_) {} } renderWatchbar(); }
+async function refreshWatch() { const l = watchlist(); needMeta(l.filter(w => !w.icon).map(w => w.mint)); if (l.length) { try { watchPrices = await jup.prices(l.map(w => w.mint)); } catch (_) {} } renderWatchbar(); }
 
 /* ---------- search ---------- */
 const q = $("q"), results = $("results");
@@ -1316,7 +1484,7 @@ async function search(v) {
       b.type = "button"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", "false");
       mid.append(make("div", "sym", `${t.symbol || "?"}${t.isVerified ? " ✓" : ""}`), make("div", "nm", `${t.name || ""} · ${short(t.id)}`));
       n2.append(make("div", "", price(t.usdPrice)), make("div", "", `MC ${usd(t.mcap)}`));
-      b.append(icon(make("img", "tok-icon"), t.icon), mid, n2);
+      b.append(icon(make("img", "tok-icon"), t.icon, t.id), mid, n2);
       b.addEventListener("click", () => { closeResults(); q.value = ""; location.hash = `#/token/${t.id}`; });
       li.append(b); results.append(li);
     }
@@ -1473,6 +1641,7 @@ document.addEventListener("keydown", e => {
 
 /* ---------- boot ---------- */
 refreshSolPrice(); setInterval(refreshSolPrice, 60000);
+setTimeout(enrich, 2000);
 renderWatchbar(); refreshWatch(); setInterval(refreshWatch, 30000);
 seedPulse(); setTimeout(curveLoop, 1500);
 setInterval(() => renderPulse(), 1000);

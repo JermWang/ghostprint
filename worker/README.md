@@ -9,6 +9,7 @@ A Cloudflare Worker that holds Ghostprint's API keys so the static site never sh
 | `/1click/*` | NEAR Intents 1Click + `ONECLICK_JWT` | removes the 0.1–0.2% keyless fee |
 | `/jito` | Jito block engine | only `sendTransaction` |
 | `/x/search` | X recent search + `X_BEARER` | results cached for 5 minutes; X charges per post read |
+| `/ipfs/<cid>` | ipfs.io, dweb.link, Pinata (raced) | token images and metadata, cached at the edge for a week; images and JSON only |
 | `/health` | none | shows which upstreams are configured |
 
 ## Deploy

@@ -2,6 +2,8 @@
 import { bondingCurveAddress, decodeCurve, tradesFromLogs, tradesFromTx, fromBase64, eventPriceSol, PUMP_PROGRAM } from "./pump.js";
 import { base58Decode } from "./trace.js";
 import { walletSwaps, SOL_MINT } from "./market.js";
+import { imageSources, socialUrl, decodeMetaplex, decodeToken2022Meta, METAPLEX, TOKEN_2022 } from "./media.js";
+export { GATEWAYS, ipfsPath, imageSources, socialUrl, setMediaProxy, decodeMetaplex, decodeToken2022Meta, METAPLEX, identicon } from "./media.js";
 
 export const PUMPPORTAL_WS = "wss://pumpportal.fun/api/data";
 
@@ -90,27 +92,58 @@ export async function readCurves({ connection, web3, mints }) {
   return out;
 }
 
-// Token metadata JSON (image and socials) for pump.fun tokens, cached, a few at a time.
+// Token metadata JSON (image, socials, description), cached by URI, a few at a time. A failed read is
+// forgotten after a minute so it gets another chance.
 const metaCache = new Map();
 let metaActive = 0;
 const metaQueue = [];
 export const ipfs = u => typeof u === "string" ? u.replace(/^ipfs:\/\//, "https://ipfs.io/ipfs/") : u;
 export function metadata(uri) {
-  if (!uri || !/^(https|ipfs):\/\//.test(uri)) return Promise.resolve(null);
+  if (!uri || !/^(https|ipfs|ar):\/\//.test(uri)) return Promise.resolve(null);
   if (metaCache.has(uri)) return metaCache.get(uri);
   const p = new Promise(resolve => { metaQueue.push({ uri, resolve }); drain(); });
   metaCache.set(uri, p);
+  p.then(r => { if (!r) setTimeout(() => metaCache.delete(uri), 60_000); });
   return p;
 }
+const timed = (url, ms) => { const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), ms); return fetch(url, { signal: ctl.signal }).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json(); }).finally(() => clearTimeout(t)); };
+async function readJson(uri) {
+  const u = uri.replace(/^ar:\/\//, "https://arweave.net/"), list = imageSources(ipfs(u));
+  // race the first two sources, then fall back one at a time
+  try { return await Promise.any(list.slice(0, 2).map(x => timed(x, 7000))); } catch (_) {}
+  for (const x of list.slice(2)) { try { return await timed(x, 6000); } catch (_) {} }
+  return null;
+}
 function drain() {
-  while (metaActive < 4 && metaQueue.length) {
+  while (metaActive < 6 && metaQueue.length) {
     const { uri, resolve } = metaQueue.shift();
     metaActive++;
-    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 6000);
-    fetch(ipfs(uri), { signal: ctl.signal }).then(r => r.ok ? r.json() : null).then(j => resolve(j ? {
-      image: ipfs(j.image), twitter: j.twitter, telegram: j.telegram, website: j.website, description: typeof j.description === "string" ? j.description.slice(0, 280) : undefined
-    } : null)).catch(() => resolve(null)).finally(() => { clearTimeout(t); metaActive--; drain(); });
+    readJson(uri).then(j => resolve(j && typeof j === "object" ? {
+      image: typeof j.image === "string" ? ipfs(j.image.trim()) : undefined,
+      twitter: socialUrl("twitter", j.twitter ?? j.extensions?.twitter), telegram: socialUrl("telegram", j.telegram ?? j.extensions?.telegram),
+      website: socialUrl("website", j.website ?? j.extensions?.website),
+      description: typeof j.description === "string" ? j.description.slice(0, 280) : undefined
+    } : null)).catch(() => resolve(null)).finally(() => { metaActive--; drain(); });
   }
+}
+
+// Name, symbol and metadata URI straight from the chain, for tokens that reach the terminal without
+// them (migrations, pasted mints, tokens no indexer has seen yet). Metaplex metadata first; Token-2022
+// mints that carry their own metadata extension second.
+export async function onchainMeta({ connection, web3, mints }) {
+  const out = new Map(), prog = new web3.PublicKey(METAPLEX), enc = new TextEncoder();
+  for (let i = 0; i < mints.length; i += 100) {
+    const batch = mints.slice(i, i + 100);
+    const pdas = batch.map(m => web3.PublicKey.findProgramAddressSync([enc.encode("metadata"), prog.toBytes(), new web3.PublicKey(m).toBytes()], prog)[0]);
+    const infos = await connection.getMultipleAccountsInfo(pdas, "confirmed");
+    const missing = [];
+    infos.forEach((info, j) => { const d = info && decodeMetaplex(new Uint8Array(info.data)); if (d && (d.uri || d.symbol)) out.set(batch[j], d); else missing.push(batch[j]); });
+    if (missing.length) {
+      const minfos = await connection.getMultipleAccountsInfo(missing.map(m => new web3.PublicKey(m)), "confirmed");
+      minfos.forEach((info, j) => { if (info && info.owner.toBase58() === TOKEN_2022) { const d = decodeToken2022Meta(new Uint8Array(info.data)); if (d) out.set(missing[j], d); } });
+    }
+  }
+  return out;
 }
 
 // Top holders with owners and labels, plus mint authorities.

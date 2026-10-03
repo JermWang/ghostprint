@@ -5,6 +5,7 @@
 //   /1click/*    NEAR Intents 1Click API with the partner JWT
 //   /jito        Jito block engine sendTransaction relay
 //   /x/search    X recent search (cached; costs money per post read, so it's opt-in on the site)
+//   /ipfs/<cid>  token images and metadata, raced across public gateways and cached at the edge
 //   /health      which upstreams are configured
 // Secrets: RPC_URL, RPC_WS_URL (optional), JUP_API_KEY, ONECLICK_JWT, X_BEARER. Var: ALLOWED_ORIGINS.
 
@@ -16,6 +17,8 @@ const RPC_METHODS = new Set([
 ]);
 const JUP = "https://api.jup.ag", ONECLICK = "https://1click.chaindefuser.com", JITO = "https://mainnet.block-engine.jito.wtf/api/v1/transactions";
 const X_SEARCH = "https://api.x.com/2/tweets/search/recent";
+const GATEWAYS = ["https://ipfs.io/ipfs/", "https://dweb.link/ipfs/", "https://gateway.pinata.cloud/ipfs/"];
+const IPFS_PATH = /^\/ipfs\/((?:Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{50,})(?:\/[\w\-.%]+)*)$/;
 
 const json = (body, status = 200, headers = {}) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", ...headers } });
 
@@ -33,11 +36,15 @@ export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url), origin = req.headers.get("origin") || "";
     const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
-    const originOk = !allowed.length || allowed.includes(origin);
+    // <img> requests carry no Origin header, only a Referer, so IPFS reads may prove their origin either way
+    const refOrigin = (() => { try { return new URL(req.headers.get("referer") || "").origin; } catch (_) { return ""; } })();
+    const isIpfs = url.pathname.startsWith("/ipfs/");
+    const originOk = !allowed.length || allowed.includes(origin) || (isIpfs && !origin && allowed.includes(refOrigin));
     const cors = { "access-control-allow-origin": originOk && origin ? origin : allowed.length ? "null" : "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,OPTIONS", vary: "origin" };
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (!originOk) return json({ error: "origin not allowed" }, 403, cors);
-    if (!allow(req.headers.get("cf-connecting-ip") || "anon")) return json({ error: "rate limited" }, 429, cors);
+    const ip = req.headers.get("cf-connecting-ip") || "anon";
+    if (!(isIpfs ? allow(`${ip}:img`, 200) : allow(ip))) return json({ error: "rate limited" }, 429, cors);
     try {
       if (url.pathname === "/health") return json({ ok: true, rpc: !!env.RPC_URL, jupiterKey: !!env.JUP_API_KEY, oneclickJwt: !!env.ONECLICK_JWT, x: !!env.X_BEARER }, 200, cors);
       if (url.pathname === "/rpc") return await rpc(req, env, cors);
@@ -45,6 +52,7 @@ export default {
       if (url.pathname.startsWith("/1click/")) return await oneclick(req, env, url, cors);
       if (url.pathname === "/jito") return await jito(req, env, cors);
       if (url.pathname === "/x/search") return await xsearch(env, url, cors, ctx);
+      if (isIpfs) return await ipfsGet(url, cors, ctx);
       return json({ error: "not found" }, 404, cors);
     } catch (e) {
       return json({ error: "upstream error" }, 502, cors);
@@ -117,6 +125,28 @@ async function xsearch(env, url, cors, ctx) {
       author: { username: u.username, name: u.name, image: u.profile_image_url, verified: !!u.verified, followers: u.public_metrics?.followers_count || 0 } };
   });
   const res = json({ posts }, 200, { "cache-control": "max-age=300" });
+  if (cache) ctx.waitUntil(cache.put(key, res.clone()));
+  return withCors(res, cors);
+}
+
+// Content-addressed, so a hit is good forever. Only images and JSON/text come back, under a CSP that
+// stops an SVG or anything else from running script on this origin.
+async function ipfsGet(url, cors, ctx) {
+  const m = url.pathname.match(IPFS_PATH);
+  if (!m) return json({ error: "bad ipfs path" }, 400, cors);
+  const cache = typeof caches !== "undefined" ? caches.default : null, key = `https://ipfs-cache.ghostprint/${m[1]}`;
+  if (cache) { const hit = await cache.match(key); if (hit) return withCors(hit, cors); }
+  const ctls = GATEWAYS.map(() => new AbortController()), timer = setTimeout(() => ctls.forEach(c => c.abort()), 15000);
+  let up;
+  try {
+    up = await Promise.any(GATEWAYS.map((g, i) => fetch(g + m[1], { signal: ctls[i].signal }).then(r => { if (!r.ok) throw new Error(String(r.status)); r.i = i; return r; })));
+  } catch (_) { return json({ error: "not available on any gateway" }, 504, cors); }
+  finally { clearTimeout(timer); }
+  ctls.forEach((c, i) => { if (i !== up.i) c.abort(); });
+  const type = (up.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  if (!/^(image\/[\w.+-]+|application\/json|text\/plain)$/.test(type)) return json({ error: "unsupported content type" }, 415, cors);
+  if (Number(up.headers.get("content-length") || 0) > 8_000_000) return json({ error: "too large" }, 413, cors);
+  const res = new Response(up.body, { status: 200, headers: { "content-type": type, "cache-control": "public, max-age=604800, immutable", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox", "x-content-type-options": "nosniff" } });
   if (cache) ctx.waitUntil(cache.put(key, res.clone()));
   return withCors(res, cors);
 }
