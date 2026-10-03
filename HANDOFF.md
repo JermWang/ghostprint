@@ -135,7 +135,7 @@ Chain: Solana. Business model: a fee on each Ghost mode trade, like Axiom, Photo
     - Exit: the ghost sells, then closes its token account and sends to a route whose recipient is the main wallet.
 - **Not verified, and the first thing to do:**
   - **A real Ghost buy and exit with about 0.05 SOL.** Confirm that 1Click accepts SOL→SOL (same asset, different recipient) on Solana, and whether `confidentiality: "basic"` works with `ORIGIN_CHAIN` deposits or falls back to public. Note how long routes take and what 1Click charges.
-  - **A real mainnet trade.** Make a small buy and sell with a real wallet and check the treasury receives the fee. Watch for: CORS on `api.jup.ag` and DexScreener from the github.io origin, the shape of the real `/swap-instructions` response, transactions exceeding the 1232-byte limit on complex routes (the code refuses rather than sending), and how well transactions land through the public RPC.
+  - **A real mainnet trade.** Make a small buy and sell with a real wallet and check the treasury receives the fee. Watch for: CORS on `api.jup.ag` and DexScreener from the live origin, the shape of the real `/swap-instructions` response, transactions exceeding the 1232-byte limit on complex routes (the code refuses rather than sending), and how well transactions land through the public RPC.
   - **Real mainnet data.** This cloud environment's network policy blocked `api.mainnet-beta.solana.com` and `lite-api.jup.ag`, so nothing has run against the real chain. Check:
     - that the public RPC allows browser CORS and what its rate limits are for about 70 calls;
     - trade detection on real Jupiter, Pump.fun and PumpSwap transactions and on trading-bot wallets;
