@@ -1,7 +1,7 @@
 // Ghostprint terminal. Views: Pulse, Trending, token page, Tracker, Portfolio. All data comes from public
 // sources in the browser (PumpPortal, Jupiter, DexScreener, your Solana RPC, NEAR Intents); every trade is
 // signed by your wallet, or locally by your instant/ghost wallets which are derived from one signature of it.
-import { TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE, PROXY_URL } from "./config.js";
+import { RPC_URL, TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE, PROXY_URL } from "./config.js";
 import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError, JITO_URL, JITO_MIN_TIP } from "./swap.js";
 import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, newRule, ruleTarget } from "./orders.js";
 import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
@@ -92,7 +92,7 @@ const preset = () => settings.presets[settings.preset] || DEFAULTS.presets[0];
 // With PROXY_URL set, RPC, Jupiter, NEAR Intents, Jito and X go through the Ghostprint proxy, which holds the keys.
 const PROXY = (PROXY_URL || "").replace(/\/$/, "");
 setMediaProxy(PROXY);
-const rpcUrl = (() => { const v = store.get("ghostprint-rpc-url", null) || (() => { try { return localStorage.getItem("ghostprint-rpc"); } catch (_) { return null; } })(); return typeof v === "string" && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim() : PROXY ? `${PROXY}/rpc` : DEFAULT_RPC; })();
+const rpcUrl = (() => { const v = store.get("ghostprint-rpc-url", null) || (() => { try { return localStorage.getItem("ghostprint-rpc"); } catch (_) { return null; } })(); return typeof v === "string" && /^https?:\/\/\S+$/.test(v.trim()) ? v.trim() : PROXY ? `${PROXY}/rpc` : RPC_URL || DEFAULT_RPC; })();
 const connection = new web3.Connection(rpcUrl, "confirmed");
 const jup = jupiter({ base: PROXY ? `${PROXY}/jup` : JUP_BASE, apiKey: PROXY ? "" : JUP_API_KEY, minInterval: PROXY ? 300 : JUP_API_KEY ? 1050 : 2050 });
 const oc = oneclick({ base: PROXY ? `${PROXY}/1click` : undefined, jwt: PROXY ? "" : ONECLICK_JWT });
