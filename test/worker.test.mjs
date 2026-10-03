@@ -66,3 +66,25 @@ test("x search: bearer auth, simplified posts", async () => {
     assert.equal(none.status, 503);
   } finally { f.restore(); }
 });
+
+test("ipfs: races gateways, serves images to <img> requests from allowed pages, refuses html and bad paths", async () => {
+  const CID = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG";
+  const f = withFetch(url => url.startsWith("https://dweb.link/") ? new Response("PNG", { status: 200, headers: { "content-type": "image/png" } }) : new Response("", { status: 504 }));
+  try {
+    const img = await worker.fetch(new Request(`https://p.test/ipfs/${CID}`, { headers: { referer: "https://jermwang.github.io/ghostprint/app.html" } }), env, ctx);
+    assert.equal(img.status, 200);
+    assert.equal(img.headers.get("content-type"), "image/png");
+    assert.match(img.headers.get("content-security-policy"), /sandbox/);
+    assert.equal(await img.text(), "PNG");
+    assert.equal(f.calls.length, 3);
+    const stranger = await worker.fetch(new Request(`https://p.test/ipfs/${CID}`, { headers: { referer: "https://evil.test/" } }), env, ctx);
+    assert.equal(stranger.status, 403);
+    const bad = await worker.fetch(new Request("https://p.test/ipfs/notacid", { headers: ORIGIN }), env, ctx);
+    assert.equal(bad.status, 400);
+  } finally { f.restore(); }
+  const g = withFetch(() => new Response("<script>", { status: 200, headers: { "content-type": "text/html" } }));
+  try {
+    const html = await worker.fetch(new Request(`https://p.test/ipfs/${"QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"}/x`, { headers: ORIGIN }), env, ctx);
+    assert.equal(html.status, 415);
+  } finally { g.restore(); }
+});

@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Ghostprint terminal: live pump.fun Pulse, one-click trading through Jupiter, wallet tracking, and Ghost mode privacy over NEAR Intents.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ghostprint">
+<meta property="og:title" content="Ghostprint Terminal">
+<meta property="og:description" content="Live pump.fun Pulse, one-click Jupiter trading, wallet tracking, limit orders and Ghost mode privacy over NEAR Intents.">
+<meta property="og:url" content="https://jermwang.github.io/ghostprint/app.html">
+<meta property="og:image" content="https://jermwang.github.io/ghostprint/media/brand/banner.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://jermwang.github.io/ghostprint/media/brand/banner.png">
 <title>Ghostprint Terminal</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
@@ -153,7 +161,7 @@ tr.pick:hover td{background:var(--ink-2)}
 .tokview{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:10px}
 .tok-main{display:flex;flex-direction:column;gap:10px;min-width:0}
 .tok-side{display:flex;flex-direction:column;gap:10px;min-width:0}
-@media (max-width:1000px){.tokview{display:flex;flex-direction:column}.tok-main,.tok-side{display:contents}.tok-main>.panel:first-child{order:1}.tok-side>.trade{order:2}.tok-main>.panel:nth-child(2){order:3}.tok-side>.audit{order:4}.chart{height:320px}}
+@media (max-width:1000px){.tokview{display:flex;flex-direction:column}.tok-main,.tok-side{display:contents}.tok-main>.panel:first-child{order:1}.tok-side>.trade{order:2}.tok-side>.orders{order:3}.tok-main>.panel:nth-child(2){order:4}.tok-side>.audit{order:5}.chart{height:320px}}
 .tok-head{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding:12px 14px}
 .tok-id{display:flex;gap:10px;align-items:center;min-width:0}
 .tok-id .tok-icon{width:40px;height:40px;border-radius:9px}
@@ -289,6 +297,98 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .toast.ok{border-left-color:var(--up)}.toast.err{border-left-color:var(--accent)}.toast.info{border-left-color:var(--warn)}
 .toast a{color:var(--mute-ink)}
 @media (prefers-reduced-motion:reduce){.pcard.fresh,tr.newrow td,.chart .empty{animation:none}.btn,.switch::after{transition:none}}
+
+/* visual pass: softer surfaces, avatars with curve rings, icon links, tiles and meters instead of walls of numbers */
+:root{--paper:#E8E9EA;--line:#262A2F;--ink-1:#1A1C20;--ink-2:#22252A;--ink-3:#2F333A}
+.panel{border-radius:12px}
+.phead h2{display:flex;align-items:center;gap:8px}
+.phead h2 svg.colg{width:15px;height:15px;color:var(--accent)}
+.ico{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+.plist{gap:7px;padding:8px}
+.pcard{grid-template-columns:auto minmax(0,1fr) auto;gap:12px;padding:10px 12px;border-radius:12px;transition:border-color .15s,transform .15s,background .15s}
+.pcard:hover{border-color:var(--ink-3);background:color-mix(in srgb,var(--paper) 3%,var(--ink-2));transform:translateY(-1px)}
+.av{--p:0;position:relative;width:54px;height:54px;border-radius:50%;padding:3px;background:var(--ink-3);flex:none}
+.av.ring{background:conic-gradient(var(--up) calc(var(--p) * 1%),var(--ink-3) 0)}
+.av.ring.hot{background:conic-gradient(var(--accent) calc(var(--p) * 1%),var(--ink-3) 0)}
+.av.grad{background:var(--warn)}
+.av .tok-icon,.pcard .av .tok-icon{width:100%;height:100%;border-radius:50%;border:2px solid var(--ink-2);object-fit:cover;background:var(--ink-1);image-rendering:auto}
+.av-badge{position:absolute;right:-3px;bottom:-3px;width:18px;height:18px;border-radius:50%;background:var(--warn);color:var(--ink);font:700 .6rem/15px var(--font-mono);text-align:center;border:2px solid var(--ink-2)}
+.av.big{width:66px;height:66px}
+.av.big .tok-icon{border-color:var(--ink-1)}
+.av.big .av-badge{border-color:var(--ink-1)}
+.pc-main{min-width:0}
+.pc-top{align-items:center}
+.pc-top b{font-size:.94rem;letter-spacing:-.01em}
+.pc-top .nm{font-size:.76rem}
+.pc-top .age{font:500 .64rem var(--font-mono);color:var(--mute-ink);background:var(--ink-1);border-radius:999px;padding:2px 7px}
+.pc-top .age.new{color:var(--up)}
+.pc-stats{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:6px}
+.pc-stats .mc{font:600 .82rem var(--font-mono);margin-right:3px}
+.pc-stats .st{display:inline-flex;align-items:center;gap:4px;font:.66rem var(--font-mono);color:var(--mute-ink);background:var(--ink-1);border-radius:6px;padding:2px 6px}
+.pc-stats .st b{color:var(--paper);font-weight:500}
+.pc-stats .st.warn,.pc-stats .st.warn b{color:var(--warn)}
+.pc-stats .curve{font:600 .66rem var(--font-mono);color:var(--up)}
+.pc-stats .curve.hot{color:var(--accent)}
+.pc-links{display:flex;gap:4px;margin-top:7px;flex-wrap:wrap}
+.lk{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:24px;min-width:24px;padding:0 6px;border-radius:7px;background:var(--ink-1);border:1px solid var(--line);color:var(--mute-ink);text-decoration:none;cursor:pointer;font:500 .7rem var(--font-mono);transition:color .12s,border-color .12s,background .12s}
+.lk:hover{color:var(--paper);border-color:var(--ink-3);background:var(--ink-3)}
+.lk.soc{color:var(--paper)}
+.lk-tg:hover{color:#2AABEE}.lk-web:hover{color:var(--up)}.lk-pump:hover{color:#86EFAC}.lk-dex:hover,.lk-eye:hover,.lk-scan:hover,.lk-search:hover{color:var(--warn)}
+.lk.done{color:var(--up);border-color:var(--up)}
+.pc-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.qb{padding:8px 11px;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,var(--ink-1));border-color:color-mix(in srgb,var(--accent) 35%,var(--ink-3))}
+.pcard .snipe{margin:0;padding:5px 7px;text-align:center}
+@media (max-width:520px){.pcard{grid-template-columns:auto minmax(0,1fr);}.pc-acts{grid-column:1/-1;flex-direction:row}.pc-acts .qb{flex:1}.av{width:48px;height:48px}}
+
+/* token page */
+.tok-head{justify-content:space-between;padding:14px 16px 10px}
+.tok-id{gap:14px}
+.tok-titles{min-width:0}
+.tok-titles h1{font-size:1.35rem;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin:0}
+.tok-titles .tname{font:400 .84rem var(--font-display);color:var(--mute-ink)}
+.tok-titles .sub{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:7px}
+.pill{font:500 .66rem var(--font-mono);background:var(--ink-2);border-radius:999px;padding:4px 10px;color:var(--mute-ink)}
+.curvepill{color:var(--up)}
+.links{display:flex;flex-wrap:wrap;gap:6px}
+.links .lk{height:30px;padding:0 10px;font-size:.72rem;border-radius:9px}
+.links .lk .ico,.sub .lk .ico{width:13px;height:13px}
+.sub .lk{height:26px;padding:0 9px;border-radius:999px}
+.tdesc{margin:0;padding:0 16px 12px;color:var(--mute-ink);font-size:.82rem;line-height:1.55;max-width:96ch;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.tiles{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;padding:0 16px 14px}
+.tile{background:var(--ink-2);border-radius:10px;padding:8px 11px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.tile .k{font:.58rem var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink)}
+.tile .v{font:600 .92rem var(--font-mono);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile.chg:has(.up){background:color-mix(in srgb,var(--up) 13%,var(--ink-2))}
+.tile.chg:has(.down){background:color-mix(in srgb,var(--accent) 13%,var(--ink-2))}
+@media (max-width:1300px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:560px){.tiles{grid-template-columns:repeat(6,minmax(0,1fr));padding:0 12px 12px}.tile{grid-column:span 3}.tile.chg{grid-column:span 2}.tok-head{padding:12px}.links .lk span{display:none}.links .lk{width:32px;padding:0}}
+.audit{gap:10px}
+.badges{display:flex;gap:6px;flex-wrap:wrap}
+.badge{display:inline-flex;align-items:center;gap:5px;font:500 .68rem var(--font-mono);border-radius:999px;padding:4px 10px;background:var(--ink-2);color:var(--mute-ink)}
+.badge.ok{color:var(--up);background:color-mix(in srgb,var(--up) 12%,var(--ink-2))}
+.badge.bad{color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,var(--ink-2))}
+.meter{display:grid;gap:5px}
+.meter .mrow{display:flex;justify-content:space-between;gap:10px}
+.meter .mrow .k{color:var(--mute-ink)}
+.mbar{height:6px;border-radius:3px;background:var(--ink-3);overflow:hidden}
+.mbar i{display:block;height:100%;background:var(--up);border-radius:3px;transition:width .4s}
+.mbar i.warn{background:var(--warn)}
+
+/* lists and portfolio */
+.cell-tok .tok-icon,.results .tok-icon,.watchbar a img{border-radius:50%}
+.card{display:flex;gap:12px;align-items:center}
+.card .cg{width:26px;height:26px;color:var(--mute-ink);flex:none}
+.alloc{grid-column:1/-1;padding:12px 14px;display:grid;gap:9px}
+.alloc>.k{font:.6rem var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mute-ink)}
+.abar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--ink-3);gap:2px}
+.abar i{display:block;height:100%;min-width:2px}
+.alegend{display:flex;flex-wrap:wrap;gap:6px 16px}
+.ali{display:inline-flex;align-items:center;gap:6px;font:.7rem var(--font-mono)}
+.ali>i{width:8px;height:8px;border-radius:2px;flex:none}
+.ali .tok-icon{width:16px;height:16px;border-radius:50%}
+td.pnl .pb{display:block;height:3px;border-radius:2px;margin:4px 0 0 auto;opacity:.85}
+.pb.pos{background:var(--up)}.pb.neg{background:var(--accent)}
+@media (prefers-reduced-motion:reduce){.pcard,.lk,.mbar i{transition:none}.pcard:hover{transform:none}}
 </style>
 </head>
 <body>
@@ -332,11 +432,11 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       </div>
     </div>
     <div class="pulse-cols">
-      <div class="panel pcol on" data-col="new"><div class="phead"><h2>New Pairs</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+      <div class="panel pcol on" data-col="new"><div class="phead"><h2><span data-pixel="flame" class="colg"></span>New Pairs</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
         <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter New Pairs by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
-      <div class="panel pcol" data-col="final"><div class="phead"><h2>Final Stretch</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+      <div class="panel pcol" data-col="final"><div class="phead"><h2><span data-pixel="stairs" class="colg"></span>Final Stretch</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
         <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter Final Stretch by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
-      <div class="panel pcol" data-col="migrated"><div class="phead"><h2>Migrated</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
+      <div class="panel pcol" data-col="migrated"><div class="phead"><h2><span data-pixel="route" class="colg"></span>Migrated</h2><span class="count"></span><span class="grow"></span><span class="paused" hidden>PAUSED</span></div>
         <div class="filters"><input class="inp" data-f="q" placeholder="Filter name" aria-label="Filter Migrated by name"><input class="inp" data-f="minMcap" placeholder="Min MC $" inputmode="numeric" aria-label="Minimum market cap"><label><input type="checkbox" data-f="socials">Socials</label></div><div class="plist"></div></div>
     </div>
   </section>
@@ -357,21 +457,23 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
       <div class="panel">
         <div class="tok-head">
           <div class="tok-id">
-            <img class="tok-icon" id="t-icon" alt="">
-            <div>
-              <h1><span id="t-sym">—</span><button class="star" id="t-star" type="button" aria-pressed="false" aria-label="Add to watchlist">★</button></h1>
-              <div class="sub"><span id="t-name"></span><button id="t-mint" type="button" title="Copy mint address"></button><span id="t-links"></span></div>
+            <div class="av big" id="t-av"><img class="tok-icon" id="t-icon" alt=""><span class="av-badge" hidden></span></div>
+            <div class="tok-titles">
+              <h1><span id="t-sym">—</span><span class="tname" id="t-name"></span><button class="star" id="t-star" type="button" aria-pressed="false" aria-label="Add to watchlist">★</button></h1>
+              <div class="sub"><span id="t-ca"></span><span class="pill" id="t-age" hidden></span><span class="pill curvepill" id="t-curve" hidden></span></div>
             </div>
           </div>
-          <div class="stats">
-            <div class="stat"><span class="k">Price</span><span class="v" id="s-price">—</span></div>
-            <div class="stat"><span class="k">MC</span><span class="v" id="s-mcap">—</span></div>
-            <div class="stat"><span class="k">Liq</span><span class="v" id="s-liq">—</span></div>
-            <div class="stat"><span class="k">Vol 24h</span><span class="v" id="s-vol">—</span></div>
-            <div class="stat"><span class="k">5m</span><span class="v" id="s-c5">—</span></div>
-            <div class="stat"><span class="k">1h</span><span class="v" id="s-c1">—</span></div>
-            <div class="stat"><span class="k">24h</span><span class="v" id="s-c24">—</span></div>
-          </div>
+          <div class="links" id="t-links"></div>
+        </div>
+        <p class="tdesc" id="t-desc" hidden></p>
+        <div class="tiles">
+          <div class="tile"><span class="k">Price</span><span class="v" id="s-price">—</span></div>
+          <div class="tile"><span class="k">Market cap</span><span class="v" id="s-mcap">—</span></div>
+          <div class="tile"><span class="k">Liquidity</span><span class="v" id="s-liq">—</span></div>
+          <div class="tile"><span class="k">Vol 24h</span><span class="v" id="s-vol">—</span></div>
+          <div class="tile chg"><span class="k">5m</span><span class="v" id="s-c5">—</span></div>
+          <div class="tile chg"><span class="k">1h</span><span class="v" id="s-c1">—</span></div>
+          <div class="tile chg"><span class="k">24h</span><span class="v" id="s-c24">—</span></div>
         </div>
         <div class="chart" id="chart"><div class="empty">Loading chart…</div></div>
         <div class="curvebar" id="curvebar" hidden><span>Bonding curve</span><div class="pbar"><i></i></div><span id="curvepct"></span></div>

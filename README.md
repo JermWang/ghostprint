@@ -71,7 +71,8 @@ Tests run against a fake chain (`test/mockchain.mjs`), fake Jupiter responses (`
 - `diagrams.js`: the explanatory drawings (ghost route and exit, wallet derivation, overview, proxy, Pulse sources, limit order, autopilot, transaction stack, bonding curve), shared by the landing page and the docs
 - `app.html`: the terminal's markup and styles; `terminal.js`: its views and logic
 - `pump.js`: pump.fun bonding-curve and trade-event decoding
-- `feeds.js`: PumpPortal websocket, RPC live trades, curve reads, metadata, holders, tracked-wallet swaps
+- `feeds.js`: PumpPortal websocket, RPC live trades, curve reads, metadata JSON (gateway race), on-chain token metadata, holders, tracked-wallet swaps
+- `media.js`: IPFS link parsing, image source lists, social link cleanup, Metaplex and Token-2022 metadata decoding, generated pixel avatars (no DOM or network, tested in Node)
 - `market.js`: Pulse board, wallet swap parsing, PnL (no DOM or network, so it's tested in Node)
 - `config.js`: treasury, fee, Jupiter settings
 - `swap.js`: Jupiter client, fee math, transaction assembly, sending and confirming

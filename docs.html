@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="How Ghostprint works: wallets, Jupiter routing, the 0.5% fee, Ghost mode on NEAR Intents, Pulse data, orders, Exposure and the proxy.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Ghostprint">
+<meta property="og:title" content="Ghostprint Docs">
+<meta property="og:description" content="How Ghostprint works: wallets, Jupiter routing, fees, Ghost mode on NEAR Intents, Pulse data, orders and Exposure.">
+<meta property="og:url" content="https://jermwang.github.io/ghostprint/docs.html">
+<meta property="og:image" content="https://jermwang.github.io/ghostprint/media/brand/banner.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://jermwang.github.io/ghostprint/media/brand/banner.png">
 <title>Ghostprint Docs</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
@@ -135,8 +143,6 @@ td code{white-space:nowrap}
 }
 
 kbd{font-family:var(--font-mono);font-size:.78rem;background:var(--ink);color:var(--paper);border-radius:5px;padding:2px 7px;box-shadow:0 2px 0 var(--ink-3)}
-.addr{font-family:var(--font-mono);font-size:.8rem;background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:6px;overflow-wrap:anywhere;text-decoration:none}
-.addr:hover{color:var(--accent)}
 
 details.faq{background:var(--paper);border:1.5px solid var(--ink);border-radius:10px;margin:8px 0;max-width:76ch}
 details.faq summary{cursor:pointer;padding:12px 14px;font-weight:600;font-size:.95rem;list-style:none;display:flex;justify-content:space-between;gap:12px}
@@ -270,7 +276,6 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           <li><b>Ghost buys:</b> the fee is paid by your main wallet when it funds the route. Ghost wallets never pay Ghostprint, so no fee transfer marks them.</li>
           <li><b>Not charged:</b> ghost exits, deposits to and withdrawals from your instant wallet, and limit orders (Jupiter fills those).</li>
         </ul>
-        <p>Fees go to the treasury: <a class="addr" id="treasury-link" href="#" target="_blank" rel="noopener" data-cfg="treasury">DGorZp9ari8RGGdiQbXCsQ62HDmkxSL66xxQcYvWfWMP</a></p>
         <p>Network costs are separate and go to Solana validators: the base fee, the priority fee from your preset, and a Jito tip if set. Jupiter's routing is free.</p>
       </section>
 
@@ -323,7 +328,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
         <ul class="list">
           <li><b>Live trades</b> on a token page come from the chain: pump.fun trades are decoded straight from program logs, other DEX trades from the transaction's balance changes.</li>
           <li><b>Holders</b> come from the token's largest accounts, with the bonding curve and the dev wallet labelled, plus mint and freeze authority.</li>
-          <li><b>Charts</b> are DexScreener's. <b>Metadata</b> (image, socials) comes from the token's own metadata URI.</li>
+          <li><b>Charts</b> are DexScreener's. <b>Images and socials</b> come from the token's own metadata. If a token arrives without it (a migration, a pasted address), the terminal reads its metadata account on-chain. Images are tried through several IPFS gateways, and a pixel avatar drawn from the address shows until one loads. Every card links straight to the token's X, Telegram, website, pump.fun and DexScreener pages.</li>
           <li>Hover a column to pause it while you read. Filters by market cap, name and socials apply live.</li>
         </ul>
       </section>
@@ -373,7 +378,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
         <p>Anything in a static site is public, so API keys can't live in it. By default each browser calls free public endpoints from its own IP. For scale, Ghostprint ships a small Cloudflare Worker (<code>worker/</code>) that holds the keys and forwards requests:</p>
         <figure class="fig">
           <div class="art"><svg data-diagram="proxy" role="img" aria-label="The browser calls one worker, which adds API keys and forwards to RPC, Jupiter, 1Click and X"></svg></div>
-          <figcaption><b>The proxy</b> adds a private RPC URL, the Jupiter key, the NEAR Intents partner key and an X token. It only forwards: it never sees a private key or signs anything.</figcaption>
+          <figcaption><b>The proxy</b> adds a private RPC URL, the Jupiter key, the NEAR Intents partner key and an X token. It also serves token images from IPFS, cached at Cloudflare's edge. It only forwards: it never sees a private key or signs anything.</figcaption>
         </figure>
         <p>Set <code>PROXY_URL</code> in <code>config.js</code> to turn it on. You can also paste your own RPC URL (Helius, Triton, QuickNode) in Settings for faster reads.</p>
       </section>
@@ -405,7 +410,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           </tbody>
         </table></div>
         <ul class="list">
-          <li>Check the transaction preview in your wallet. A Ghostprint buy shows the swap, one fee transfer to the treasury above, and a Jito tip if your preset sets one. Nothing else.</li>
+          <li>Check the transaction preview in your wallet. A Ghostprint buy shows the swap, one fee transfer to the Ghostprint treasury, and a Jito tip if your preset sets one. Nothing else.</li>
           <li>Keep the instant wallet to trading money. Its key sits in an open browser tab.</li>
           <li>Bookmark the site. Never sign the Ghostprint message anywhere else.</li>
         </ul>

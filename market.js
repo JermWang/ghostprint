@@ -1,6 +1,7 @@
 // Market logic for the terminal, kept free of DOM and network so it can be tested in Node:
 // the Pulse board (which column a token belongs in), wallet-tracker swap parsing, and PnL.
 import { readTx } from "./trace.js";
+import { socialUrl } from "./media.js";
 
 export const SOL_MINT = "So11111111111111111111111111111111111111112";
 const QUOTES = new Set([SOL_MINT, "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB"]);
@@ -65,7 +66,7 @@ function passes(t, f) {
 // PumpPortal messages → board records.
 export function fromPumpPortal(m, solUsd) {
   return {
-    mint: m.mint, name: m.name, symbol: m.symbol, uri: m.uri, creator: m.traderPublicKey,
+    mint: m.mint, name: m.name, symbol: m.symbol, uri: m.uri, creator: m.traderPublicKey, image: typeof m.image === "string" ? m.image : undefined,
     createdAt: Date.now(), pump: true, pool: m.pool, mcapSol: m.marketCapSol,
     mcapUsd: solUsd && m.marketCapSol ? m.marketCapSol * solUsd : undefined,
     progress: 0, devBuySol: m.solAmount, source: "pumpportal"
@@ -79,7 +80,7 @@ export function fromJupiter(t) {
     pump: isPumpMint(t.id, t.launchpad), launchpad: t.launchpad,
     mcapUsd: t.mcap ?? t.fdv, liquidityUsd: t.liquidity, holders: t.holderCount, priceUsd: t.usdPrice,
     volume24h: t.stats24h ? (t.stats24h.buyVolume || 0) + (t.stats24h.sellVolume || 0) : undefined,
-    change1h: t.stats1h?.priceChange, twitter: t.twitter, telegram: t.telegram, website: t.website, creator: t.dev,
+    change1h: t.stats1h?.priceChange, twitter: socialUrl("twitter", t.twitter), telegram: socialUrl("telegram", t.telegram), website: socialUrl("website", t.website), creator: t.dev,
     graduatedAt: t.graduatedPool ? (Date.parse(t.graduatedAt || "") || created || Date.now()) : undefined,
     progress: typeof t.bondingCurve === "number" ? t.bondingCurve : undefined,
     topHoldersPct: t.audit?.topHoldersPercentage, devPct: t.audit?.devBalancePercentage,
