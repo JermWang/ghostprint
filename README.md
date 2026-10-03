@@ -35,7 +35,7 @@ open http://localhost:5178/app.html # terminal
 open http://localhost:5178/docs.html # docs
 ```
 
-GitHub Pages serves `main` as-is (`.nojekyll`).
+Live at https://ghostprint-black.vercel.app, deployed by Vercel from `main` as plain static files (no build step).
 
 ## Proxy (recommended before launch)
 
