@@ -1,5 +1,7 @@
 // Landing page: the code-drawn art (art.js) and the read-only Exposure tracer.
-import { trace, isAddress, short, DEFAULT_RPC } from "./trace.js";
+import { trace, isAddress, short, DEFAULT_RPC as PUBLIC_RPC } from "./trace.js";
+import { RPC_URL, PROXY_URL } from "./config.js";
+const DEFAULT_RPC = PROXY_URL ? `${PROXY_URL.replace(/\/$/, "")}/rpc` : RPC_URL || PUBLIC_RPC;
 import { C, REDUCE, renderPixels, renderIcons, machine } from "./art.js";
 import { renderDiagrams } from "./diagrams.js";
 
