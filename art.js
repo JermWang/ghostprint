@@ -51,13 +51,14 @@ document.addEventListener?.("visibilitychange", () => { if (!document.hidden && 
 
 // Size a drawing's viewBox to what was drawn (plus padding), ignoring moving parts marked data-anim.
 // The SVG must be in the rendered document; `fallback` is used when it isn't.
-export function fit(svg, { pad = 14, top = 0, fallback = "0 0 800 400" } = {}) {
+export function fit(svg, { pad = 14, top = 0, fallback = "0 0 800 400", dots = true } = {}) {
   const moving = [...svg.querySelectorAll("[data-anim]")];
   moving.forEach(m => m.setAttribute("display", "none"));
   let b = null;
   try { b = svg.getBBox(); } catch (_) {}
   moving.forEach(m => m.removeAttribute("display"));
   svg.setAttribute("viewBox", b && b.width ? `${(b.x - pad).toFixed(1)} ${(b.y - pad - top).toFixed(1)} ${(b.width + pad * 2).toFixed(1)} ${(b.height + pad * 2 + top).toFixed(1)}` : fallback);
+  if (dots) backdrop(svg);
   return svg;
 }
 
@@ -134,14 +135,38 @@ export function cable(I, parent, pts, { width = 9, speed = 28, host, muted = fal
   return g;
 }
 
-// A halftone dot field that fades out from a centre point.
-export function halftone(parent, { x0, y0, x1, y1, cx, cy, step = 9, max = 2.5, fall = 70, fill = C.INK }) {
-  const g = el("g", { fill }, parent);
+// A halftone dot field that fades out from a centre point. Dots breathe in a slow ripple that runs out
+// from the centre while the centre itself drifts a little, so the field never sits still. `squash` > 1
+// flattens the falloff into an ellipse (wide drawings). Under reduced motion it draws one still frame.
+export function halftone(parent, { x0, y0, x1, y1, cx, cy, step = 9, max = 2.5, fall = 70, fill = C.INK, squash = 1, opacity, host, amp = .18 }) {
+  const g = el("g", opacity == null ? { fill } : { fill, opacity }, parent), dots = [];
   for (let row = 0, y = y0; y < y1; y += step, row++)
     for (let x = x0 + (row % 2 ? step / 2 : 0); x < x1; x += step) {
-      const r = max - Math.hypot(x - cx, y - cy) / fall;
-      if (r > .35) el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: r.toFixed(2) }, g);
+      const d = Math.hypot(x - cx, (y - cy) * squash);
+      if ((max - d / fall) * (1 + amp) + step / fall > .35) dots.push({ x, y, c: el("circle", { cx: x.toFixed(1), cy: y.toFixed(1), r: 0 }, g) });
     }
+  let last = -1;
+  animate(t => {
+    if (t - last < .045 && last >= 0) return; // ~22 fps is plenty for a slow ripple
+    last = t;
+    const dx = Math.sin(t * .37) * step * .7, dy = Math.cos(t * .29) * step * .45;
+    for (const o of dots) {
+      const d = Math.hypot(o.x - cx - dx, (o.y - cy - dy) * squash);
+      const r = (max - d / fall) * (1 + amp * Math.sin(t * 1.5 - d / 16));
+      o.c.setAttribute("r", r > .35 ? r.toFixed(2) : 0);
+    }
+  }, host || parent.ownerSVGElement || parent);
+  return g;
+}
+// A soft halftone pool behind a finished drawing, sized to its viewBox and kept behind everything.
+export function backdrop(svg, { step = 11, max = 2.1, reach = .44, opacity = .32 } = {}) {
+  const [x, y, w, h] = (svg.getAttribute("viewBox") || "0 0 0 0").split(/\s+/).map(Number);
+  if (!w || !h) return null;
+  // the pool follows the drawing's shape: flattened for wide drawings, stretched for tall (phone) ones
+  const tall = h > w, squash = tall ? .62 : 1.6, fall = (tall ? w * 1.15 : w) * reach / (max - .35);
+  const g = halftone(svg, { x0: x, y0: y, x1: x + w, y1: y + h, cx: x + w / 2, cy: y + h * .55, step, max, fall, squash, opacity, host: svg });
+  g.setAttribute("data-anim", "");
+  svg.insertBefore(g, svg.firstChild);
   return g;
 }
 
@@ -218,7 +243,7 @@ function glyphOnPlane(parent, rows, cx, cy, size, fill = C.INK) {
 /* ---------- the hero machine ---------- */
 export function machine(svg) {
   const I = iso(300, 330, .85), { P, poly, box, cyl, plane, topM, leftM, rightM } = I;
-  halftone(svg, { x0: 20, y0: 34, x1: 340, y1: 330, cx: 150, cy: 150 });
+  halftone(svg, { x0: 20, y0: 34, x1: 340, y1: 330, cx: 150, cy: 150, host: svg });
   const cables = el("g", {}, svg);
   box(svg, -130, -130, -9, 260, 260, 9, { top: C.INK, left: C.INK, right: C.INK });
   box(svg, -130, -130, 0, 260, 260, 18);
@@ -347,6 +372,7 @@ export const ICONS = {
 export function renderIcons(root = document) {
   root.querySelectorAll("[data-icon]").forEach(host => {
     const svg = svgEl("0 0 240 150");
+    halftone(svg, { x0: 0, y0: 0, x1: 240, y1: 150, cx: 120, cy: 84, step: 8, max: 1.9, fall: 62, squash: 1.5, opacity: .4, host: svg });
     ICONS[host.dataset.icon](svg, iso(120, 92, .62));
     host.appendChild(svg);
   });
@@ -510,6 +536,7 @@ export function curveTank(svg, { ox, oy, s = 1 }) {
 // Small emblems for empty states in the terminal: one box, a flowing cable, a hovering card.
 export function emblem(kind = "stream") {
   const svg = svgEl("0 0 200 120");
+  halftone(svg, { x0: 0, y0: 0, x1: 200, y1: 120, cx: 100, cy: 74, step: 7, max: 1.5, fall: 46, squash: 1.6, fill: C.MUTE, opacity: .4, host: svg });
   const I = iso(100, 78, .55);
   if (kind === "stream") {
     I.box(svg, -95, -40, -10, 190, 80, 6, { top: C.INK, left: C.INK, right: C.INK });

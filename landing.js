@@ -93,10 +93,12 @@ function frame(now) {
   // background lattice; while tracing, a radar ring sweeps out from the wallet
   const ring = tracing && !REDUCE ? ((now - G.start)/1600 % 1)*Math.hypot(W, H) : -99;
   const hotGrid = [];
+  // the lattice is a halftone too: dots swell in a slow ripple running out from the wallet
   ctx.fillStyle = INK3; ctx.beginPath();
   for (const p of G.grid) {
     if (Math.abs(p.d - ring) < 12) { hotGrid.push(p); continue; }
-    ctx.moveTo(p.x + .8, p.y); ctx.arc(p.x, p.y, .8, 0, 6.283);
+    const r = REDUCE ? .8 : .8 + .38 * Math.sin(t * 1.5 - p.d / 22);
+    ctx.moveTo(p.x + r, p.y); ctx.arc(p.x, p.y, r, 0, 6.283);
   }
   ctx.fill();
   if (hotGrid.length) { ctx.fillStyle = ACCENT; ctx.beginPath(); for (const p of hotGrid) { ctx.moveTo(p.x + 1.2, p.y); ctx.arc(p.x, p.y, 1.2, 0, 6.283); } ctx.fill(); }
