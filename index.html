@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Ghostprint is a privacy trading terminal for Solana: live pump.fun Pulse, one-click buys, wallet tracking, and Ghost mode buys funded privately through NEAR Intents.">
 <title>Ghostprint</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
@@ -180,6 +183,7 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
 .route-fig{margin:28px 0 0;border:1.5px solid var(--ink-3);border-radius:14px;overflow:hidden;background:var(--ground)}
 .route-fig .art{overflow-x:auto;overscroll-behavior-x:contain;padding:8px 4px 2px}
 .route-fig svg{display:block;width:100%;height:auto;min-width:560px;max-width:980px;margin-inline:auto}
+.route-fig svg[data-narrow]{min-width:0;max-width:440px}
 .route-fig figcaption{background:var(--ink-2);color:var(--mute-ink);font-family:var(--font-mono);font-size:.74rem;line-height:1.5;padding:10px 14px}
 .route-fig figcaption b{color:var(--paper)}
 .band-note .btn{text-decoration:none;display:inline-block;margin:0 8px 8px 0}
@@ -274,7 +278,7 @@ footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;l
         <div class="feat"><span data-pixel="fuel"></span><h3>No fee trail</h3><p>The fee comes out of your main wallet when you fund. Ghosts never pay Ghostprint, so nothing on-chain marks them as ours.</p></div>
       </div>
       <figure class="route-fig">
-        <div class="art"><svg id="ghost-route" role="img" aria-label="Main wallet sends SOL to a one-time deposit address and the fee to the treasury; NEAR Intents routes it confidentially; the bridge pays a fresh ghost wallet, which swaps on Jupiter"></svg></div>
+        <div class="art"><svg data-diagram="ghostRoute" role="img" aria-label="Main wallet sends SOL to a one-time deposit address and the fee to the treasury; NEAR Intents routes it confidentially; the bridge pays a fresh ghost wallet, which swaps on Jupiter"></svg></div>
         <figcaption><b>A ghost buy.</b> Your wallet pays a one-time deposit address. NEAR's bridge pays the ghost. Nothing on-chain runs from you to it.</figcaption>
       </figure>
       <p class="band-note"><a class="btn primary" href="./app.html">Try Ghost mode in the terminal</a> <a class="btn" href="./docs.html#ghost">Read how it works</a></p>

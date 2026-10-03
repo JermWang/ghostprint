@@ -9,6 +9,13 @@ renderDiagrams(document);
 // diagrams wider than a phone scroll sideways; start them centred
 document.querySelectorAll(".fig .art").forEach(a => { if (a.scrollWidth > a.clientWidth) a.scrollLeft = (a.scrollWidth - a.clientWidth) / 2; });
 
+// label each cell of a wide table with its column header, for the stacked phone layout
+document.querySelectorAll(".tbl table").forEach(t => {
+  const th = [...t.querySelectorAll("thead th")].map(h => h.textContent.trim());
+  t.classList.toggle("stack", th.length > 2);
+  t.querySelectorAll("tbody tr").forEach(r => [...r.cells].forEach((c, i) => { if (th[i]) c.dataset.th = th[i]; }));
+});
+
 // live values from config.js, so the docs never drift from what the terminal does
 document.querySelectorAll("[data-cfg]").forEach(n => {
   const v = { treasury: TREASURY, fee: `${FEE_BPS / 100}%`, ghostMax: `${GHOST_MAX_SOL} SOL` }[n.dataset.cfg];

@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="How Ghostprint works: wallets, Jupiter routing, the 0.5% fee, Ghost mode on NEAR Intents, Pulse data, orders, Exposure and the proxy.">
 <title>Ghostprint Docs</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
@@ -81,6 +84,7 @@ b{color:var(--ink)}
 .figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:14px;margin:18px 0}
 .figs .fig{margin:0}
 .figs .fig svg,.hero .fig svg{min-width:0}
+.fig svg[data-narrow]{min-width:0;max-width:440px}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px;margin:16px 0}
 .card{background:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);padding:16px;min-width:0}
@@ -115,6 +119,20 @@ th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--face-l);ver
 th{font-family:var(--font-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);background:var(--ground);font-weight:500}
 tr:last-child td{border-bottom:0}
 td code{white-space:nowrap}
+/* phones: tables lose their minimum width; wide ones turn each row into a card, every cell labelled
+   with its column (docs.js copies the header in and marks them .stack) */
+@media (max-width:600px){
+  .tbl table{min-width:0}
+  .tbl .stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+  .tbl .stack tr{display:block;padding:8px 0;border-bottom:1px solid var(--face-l)}
+  .tbl .stack tr:last-child{border-bottom:0}
+  .tbl .stack td{display:grid;grid-template-columns:minmax(84px,38%) minmax(0,1fr);gap:10px;padding:4px 12px;border:0}
+  .tbl .stack td::before{content:attr(data-th);font-family:var(--font-mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);padding-top:3px}
+  .tbl .stack td:first-child{grid-template-columns:minmax(0,1fr)}
+  .tbl .stack td:first-child::before{display:none}
+  td code{white-space:normal}
+}
+}
 
 kbd{font-family:var(--font-mono);font-size:.78rem;background:var(--ink);color:var(--paper);border-radius:5px;padding:2px 7px;box-shadow:0 2px 0 var(--ink-3)}
 .addr{font-family:var(--font-mono);font-size:.8rem;background:var(--ink);color:var(--paper);padding:3px 8px;border-radius:6px;overflow-wrap:anywhere;text-decoration:none}
@@ -204,7 +222,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           <thead><tr><th>Wallet</th><th>Signs with</th><th>Use it for</th></tr></thead>
           <tbody>
             <tr><td><b>Main</b></td><td>Your wallet app, with a popup per trade</td><td>Holding funds, funding the others, careful trades</td></tr>
-            <tr><td><b>Instant</b></td><td>A key in this tab's memory, no popups</td><td>⚡ buys, presets, autopilot and snipes. Fund it directly or privately.</td></tr>
+            <tr><td><b>Instant</b></td><td>A key in this tab's memory, no popups</td><td>⚡ buys and presets when you trade from it, plus autopilot and snipes. Fund it directly or privately.</td></tr>
             <tr><td><b>Ghost</b></td><td>A fresh key per Ghost buy</td><td>Buys with no on-chain link to your main wallet</td></tr>
           </tbody>
         </table></div>
@@ -212,7 +230,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
         <p>Solana signatures are deterministic: the same wallet signing the same message always produces the same signature. Sign again on any device and you get the same instant and ghost wallets back. Nothing secret needs to be backed up beyond your main wallet.</p>
         <p>The terminal stores a short fingerprint of the signature (8 bytes of its hash, which reveals nothing). If your wallet ever signs differently, for example a different wallet app that signs messages another way, the terminal stops instead of opening a different set of wallets.</p>
         <p>Every derived wallet has an <b>Export key</b> button, so you can import it into any Solana wallet.</p>
-        <div class="note"><p><b>Only sign the Ghostprint message on Ghostprint.</b> Anyone holding that signature can rebuild your instant and ghost wallets. The message says so in plain words. Some hardware-wallet setups can't sign messages; with those, instant and Ghost mode are unavailable and you trade from the main wallet.</p></div>
+        <div class="note"><p><b>Only sign the Ghostprint message on Ghostprint.</b> Anyone holding that signature can rebuild your instant and ghost wallets; the message itself warns that it opens your private trading wallets. Some hardware-wallet setups can't sign messages; with those, instant and Ghost mode are unavailable and you trade from the main wallet.</p></div>
       </section>
 
       <section id="trading">
@@ -225,7 +243,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           <li><span>It sends the transaction, rebroadcasts it every 2 seconds until it lands or its blockhash expires, and reports the result.</span></li>
         </ol>
         <figure class="fig narrow">
-          <div class="art"><svg data-diagram="tradeTx" role="img" aria-label="A buy transaction stacked bottom to top: compute budget, Ghostprint fee, token account, Jupiter swap, cleanup, Jito tip"></svg></div>
+          <div class="art"><svg data-diagram="tradeTx" role="img" aria-label="A buy transaction stacked bottom to top: compute budget, token account, Ghostprint fee, Jupiter swap, cleanup, Jito tip if set"></svg></div>
           <figcaption><b>One buy, one transaction.</b> Every layer lands together or none do: if the swap fails, the fee is not taken.</figcaption>
         </figure>
         <h3>Presets</h3>
@@ -265,7 +283,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           <figcaption><b>A ghost buy.</b> Your main wallet's transaction ends at a deposit address shared with many other users. The ghost's SOL arrives from the bridge.</figcaption>
         </figure>
         <ol class="steps">
-          <li><span>The terminal derives the next unused ghost wallet from your signature.</span></li>
+          <li><span>The terminal derives the next ghost wallet from your signature and checks the chain that it has never been used, so a cleared browser or a new device never reuses one.</span></li>
           <li><span>It asks 1Click for a SOL → SOL route to the ghost, with <b>Confidential Intents</b> on: the sender, amount and route stay off NEAR's public record. If a route can't be confidential, it falls back to a standard intent and tells you.</span></li>
           <li><span>It checks the quote before sending anything: the recipient must be the ghost, refunds must go to your wallet, the amount and assets must match, and the deposit address must not be one of yours. Otherwise it refuses.</span></li>
           <li><span>You sign one transaction: SOL to the deposit address, plus the <span data-cfg="fee">0.5%</span> fee.</span></li>
@@ -280,7 +298,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
         <h3>What it costs</h3>
         <p>The Ghostprint fee, Solana network fees, and NEAR Intents' route fee. Without a partner key, 1Click charges about 0.1–0.2% per route; with a key held by the proxy that fee goes away. Ghost buys are capped at <b data-cfg="ghostMax">5 SOL</b> while Ghost mode is in beta.</p>
         <h3>If something goes wrong</h3>
-        <p>A route that can't complete is refunded by NEAR Intents to the wallet that sent it. Ghost wallets can always be rebuilt by signing again, and Portfolio lists every ghost with funds, with buttons to exit or export its key, so nothing is stranded.</p>
+        <p>A route that can't complete is refunded by NEAR Intents to the wallet that sent it. Ghost wallets can always be rebuilt by signing again, and Portfolio scans your ghosts on-chain and lists every one with funds, with buttons to exit or export its key, so nothing is stranded. If you've made many ghosts, Scan further looks deeper.</p>
         <div class="note ink">
           <p><b>What Ghost mode does not do.</b> Nothing makes a wallet untraceable. An observer who sees 1.000 SOL leave your wallet and 0.998 SOL reach a fresh wallet a minute later can guess. Vary amounts, don't buy the instant the ghost is funded, and don't send funds between ghosts and wallets you've used publicly. Ghost mode makes tracing expensive and uncertain; it doesn't make it impossible. Ghostprint doesn't run a mixer and never touches the funds in transit.</p>
         </div>
@@ -324,15 +342,15 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           </figure>
         </div>
         <h3>Migration sniper</h3>
-        <p>Tap 🎯 on a Pulse card to arm a snipe. When PumpPortal reports that token's migration, the instant wallet buys right away, and can set take-profit and stop-loss rules for the new position (Settings → After a snipe). Like autopilot, it needs the tab open.</p>
+        <p>Tap 🎯 on a Pulse card to arm a snipe. When PumpPortal reports that token's migration, or the on-chain curve shows it complete, the instant wallet buys right away, and can set take-profit and stop-loss rules for the new position (Settings → After a snipe). Like autopilot, it needs the tab open.</p>
         <p>The 🤖 chip in the top bar counts armed rules and snipes. Portfolio → Orders lists all of them.</p>
       </section>
 
       <section id="tracker">
         <p class="eyebrow"><span data-pixel="stack"></span>Tracker &amp; PnL</p>
         <h2>Follow wallets. Keep score.</h2>
-        <p><b>Tracker</b> watches any wallets you add and lists their swaps as they happen, read from the chain. ⚡ on a row buys the same token with your quick-buy amount, from whichever wallet you trade from (main or instant).</p>
-        <p><b>Portfolio</b> shows each wallet's positions with average cost and realized and unrealized PnL, priced in SOL. It counts trades made in the terminal; <b>Import on-chain history</b> reads up to 100 earlier transactions per page so trades made elsewhere count too. Everything is stored in this browser only.</p>
+        <p><b>Tracker</b> checks any wallets you add every 20 seconds and lists their new swaps, read from the chain. ⚡ on a row buys the same token with your quick-buy amount, from whichever wallet you trade from (main or instant).</p>
+        <p><b>Portfolio</b> shows each wallet's positions with average cost and realized and unrealized PnL, priced in SOL. It counts trades made in the terminal; <b>Import on-chain history</b> reads the wallet's last 100 transactions so trades made elsewhere count too. Ghost buys are logged under the main wallet that paid for them. Everything is stored in this browser only.</p>
       </section>
 
       <section id="exposure">
@@ -379,14 +397,15 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
           <thead><tr><th>Thing</th><th>Where it is</th></tr></thead>
           <tbody>
             <tr><td>Main wallet keys</td><td>Your wallet app. Never seen by the terminal.</td></tr>
-            <tr><td>Ghostprint signature, instant and ghost keys</td><td>This tab's memory only. Gone when you close or lock it; rebuilt by signing again.</td></tr>
+            <tr><td>Ghostprint signature, instant and ghost keys</td><td>This tab's memory only. Gone when you close the tab or disconnect; rebuilt by signing again.</td></tr>
             <tr><td>Settings, watchlist, tracked wallets, trade log, rules</td><td>This browser's local storage. Never uploaded.</td></tr>
+            <tr><td>Ghost wallet list (addresses, route status)</td><td>This browser's local storage, under your main wallet's address. It links the two, so clear site data on a shared computer. The terminal can rebuild it from the chain.</td></tr>
             <tr><td>Limit orders</td><td>On-chain, in Jupiter's Trigger program, under your wallet.</td></tr>
             <tr><td>Ghost routes in transit</td><td>NEAR Intents, refundable to the sender.</td></tr>
           </tbody>
         </table></div>
         <ul class="list">
-          <li>Check the transaction preview in your wallet. A Ghostprint buy shows the swap and one fee transfer to the treasury above, nothing else.</li>
+          <li>Check the transaction preview in your wallet. A Ghostprint buy shows the swap, one fee transfer to the treasury above, and a Jito tip if your preset sets one. Nothing else.</li>
           <li>Keep the instant wallet to trading money. Its key sits in an open browser tab.</li>
           <li>Bookmark the site. Never sign the Ghostprint message anywhere else.</li>
         </ul>
@@ -413,7 +432,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
         <details class="faq"><summary>Can Ghostprint take my funds?</summary><div><p>No. It has no server holding funds or keys. Every transaction is built in your browser and signed by you or by a key derived from your own signature. Ghost funds in transit are held by NEAR Intents and refunded to you if a route fails.</p></div></details>
         <details class="faq"><summary>Why did my trade fail?</summary><div><p>Usually the price moved past your slippage, or the transaction didn't land before it expired. Nothing but the network fee is spent when a swap fails. Try a faster preset or more slippage.</p></div></details>
         <details class="faq"><summary>Is Ghost mode anonymous?</summary><div><p>No tool makes you anonymous. Ghost mode removes the direct on-chain link between your wallet and the wallet that buys. Timing and amounts can still be matched by someone watching closely, so vary them.</p></div></details>
-        <details class="faq"><summary>Where are my instant and ghost wallets if I clear my browser?</summary><div><p>Nowhere, and that's fine: they were never stored. Connect the same main wallet, sign the same message, and they come back with their balances.</p></div></details>
+        <details class="faq"><summary>Where are my instant and ghost wallets if I clear my browser?</summary><div><p>Their keys were never stored, so nothing is lost. Connect the same main wallet, sign the same message, and they come back with their balances. Clearing the browser also deletes the local list linking your ghosts to your main wallet; the terminal finds them again on-chain.</p></div></details>
         <details class="faq"><summary>Do limit orders pay the 0.5% fee?</summary><div><p>Not today. Jupiter fills limit orders itself; terminal market trades and ghost buys pay the fee.</p></div></details>
         <details class="faq"><summary>Why is a sniper or stop loss tied to the open tab?</summary><div><p>Because it signs from the instant wallet, whose key only exists in your tab. Nothing on a server can sign for you. For orders that must fill while you're away, use a limit order.</p></div></details>
       </section>

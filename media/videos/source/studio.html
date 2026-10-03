@@ -1,0 +1,40 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Ghostprint explainers</title>
+<link href="fonts/fonts.css" rel="stylesheet">
+<style>
+:root{--ground:#D6D8D9;--paper:#EEEFEE;--ink:#1D1F22;--ink-3:#31353A;--mute:#5F646B;--accent:#FF5A24;--sora:"Sora",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--ground);color:var(--ink);font-family:var(--sora)}
+#stage{position:relative;width:100%;height:100%;overflow:hidden;
+  background:radial-gradient(circle at 62% 52%,rgba(238,239,238,.9),rgba(214,216,217,0) 60%),var(--ground)}
+#dots{position:absolute;inset:0;background-image:radial-gradient(rgba(29,31,34,.16) 1.3px,transparent 1.6px);background-size:22px 22px;
+  -webkit-mask-image:radial-gradient(circle at 64% 50%,#000 0,transparent 62%);mask-image:radial-gradient(circle at 64% 50%,#000 0,transparent 62%)}
+.brand{position:absolute;display:flex;align-items:center;gap:16px;z-index:5}
+.brand svg{display:block;color:var(--ink)}
+.meta{position:absolute;font-family:var(--mono);font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);z-index:5}
+.meta b{color:var(--accent);font-weight:700}
+.dia{position:absolute;border:0;background:transparent;will-change:transform,opacity}
+.cap{position:absolute;z-index:4}
+.cap .k{font-family:var(--mono);font-size:22px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 18px}
+.cap h2{font-weight:700;font-size:70px;line-height:1.04;letter-spacing:-.02em;margin:0 0 22px}
+.cap p{font-family:var(--mono);font-size:24px;line-height:1.5;color:var(--mute);margin:0;max-width:30ch}
+.cap ol{list-style:none;margin:26px 0 0;padding:0;font-family:var(--mono);font-size:22px;line-height:1.35;display:grid;gap:14px}
+.cap li{display:grid;grid-template-columns:40px 1fr;gap:10px;color:var(--mute);max-width:31ch}
+.cap li i{font-style:normal;display:inline-grid;place-items:center;width:32px;height:32px;border-radius:7px;background:var(--ink);color:var(--paper);font-size:16px;font-weight:700}
+.cap li.on{color:var(--ink)} .cap li.on i{background:var(--accent);color:var(--ink)}
+.card{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;z-index:6}
+.card .ghost{width:150px;color:var(--ink)} .card .word{height:62px;color:var(--ink);margin-top:40px}
+.card h1{font-weight:700;font-size:112px;letter-spacing:-.03em;line-height:1;margin:36px 0 0}
+.card .tag{font-family:var(--mono);font-size:28px;color:var(--mute);margin:30px 0 0;letter-spacing:.02em;max-width:34ch}
+.card .tag b{color:var(--ink)}
+.card .fine{font-family:var(--mono);font-size:21px;color:var(--mute);margin:22px 0 0;letter-spacing:.04em}
+.card .pill{font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;background:var(--accent);color:var(--ink);border:2px solid var(--ink);border-radius:999px;padding:8px 20px;margin-top:34px}
+.prog{position:absolute;display:flex;gap:10px;z-index:5}
+.prog span{flex:1;height:6px;border-radius:3px;background:rgba(29,31,34,.16);overflow:hidden}
+.prog span i{display:block;height:100%;width:0;background:var(--ink)}
+/* square cut */
+.sq .cap h2{font-size:54px;margin-bottom:16px} .sq .cap .k{margin-bottom:12px} .sq .cap p{max-width:40ch;font-size:23px} .sq .card h1{font-size:92px} .sq .cap ol{grid-template-columns:1fr 1fr;gap:10px 26px;font-size:19px;margin-top:18px} .sq .cap li{grid-template-columns:36px 1fr}
+</style></head>
+<body><div id="stage"><div id="dots"></div></div>
+<script type="module" src="studio.js"></script>
+</body></html>
