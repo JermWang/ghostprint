@@ -1,0 +1,98 @@
+// Ghostprint on a plain Node server (Railway): serves the static site and runs the same proxy as the
+// Cloudflare Worker in worker/ on the same origin. Env vars are the worker's secrets and vars:
+// RPC_URL, RPC_WS_URL, JUP_API_KEY, ONECLICK_JWT, X_BEARER, JITO_URL, ALLOWED_ORIGINS. No dependencies.
+import http from "node:http";
+import net from "node:net";
+import tls from "node:tls";
+import { createReadStream, statSync } from "node:fs";
+import { extname, join, normalize, sep } from "node:path";
+import { Readable } from "node:stream";
+import { fileURLToPath } from "node:url";
+import worker from "./worker/src/index.js";
+
+const ROOT = fileURLToPath(new URL(".", import.meta.url));
+const PORT = Number(process.env.PORT) || 5178;
+const PROXY_PATH = /^\/(rpc|jito|health|x\/search)$|^\/(jup|1click|ipfs)\//;
+const HIDDEN = /^(\.|node_modules$|test$|worker$|server\.mjs$|package(-lock)?\.json$)/;
+const TYPES = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8", ".json": "application/json", ".md": "text/markdown; charset=utf-8", ".svg": "image/svg+xml",
+  ".png": "image/png", ".jpg": "image/jpeg", ".ico": "image/x-icon", ".mp4": "video/mp4", ".woff2": "font/woff2", ".txt": "text/plain; charset=utf-8"
+};
+
+const selfOrigin = req => `${(req.headers["x-forwarded-proto"] || "http").split(",")[0]}://${req.headers.host}`;
+const clientIp = req => (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "anon";
+// The site always may use its own proxy, on top of whatever ALLOWED_ORIGINS lists.
+const envFor = req => ({ ...process.env, ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS ? `${process.env.ALLOWED_ORIGINS},${selfOrigin(req)}` : "" });
+
+async function proxy(req, res) {
+  const headers = new Headers();
+  for (const [k, v] of Object.entries(req.headers)) if (typeof v === "string") headers.set(k, v);
+  headers.set("cf-connecting-ip", clientIp(req));
+  // same-origin GETs carry no Origin header; the worker's allowlist expects one
+  if (!headers.has("origin") && req.headers["sec-fetch-site"] === "same-origin") headers.set("origin", selfOrigin(req));
+  let body;
+  if (req.method !== "GET" && req.method !== "HEAD") { const parts = []; for await (const c of req) parts.push(c); body = Buffer.concat(parts); }
+  const r = await worker.fetch(new Request(new URL(req.url, selfOrigin(req)), { method: req.method, headers, body }), envFor(req), { waitUntil: p => Promise.resolve(p).catch(() => {}) });
+  res.writeHead(r.status, Object.fromEntries(r.headers));
+  if (r.body && req.method !== "HEAD") Readable.fromWeb(r.body).pipe(res); else res.end();
+}
+
+function serveStatic(req, res) {
+  let path = decodeURIComponent(new URL(req.url, "http://x").pathname);
+  if (path.endsWith("/")) path += "index.html";
+  const rel = normalize(path).replace(/^[\\/]+/, "");
+  if (rel.split(/[\\/]/).some(p => HIDDEN.test(p) || p === "..")) return notFound(res);
+  let file = join(ROOT, rel), st = stat(file);
+  if (st && st.isDirectory()) { res.writeHead(301, { location: `${path}/` }); return res.end(); }
+  if (!st && !extname(rel)) { file += ".html"; st = stat(file); }
+  if (!st || !file.startsWith(ROOT.replace(/[\\/]$/, "") + sep)) return notFound(res);
+  const type = TYPES[extname(file).toLowerCase()] || "application/octet-stream";
+  const headers = { "content-type": type, "cache-control": /\.html$/.test(file) ? "no-cache" : "public, max-age=300", "accept-ranges": "bytes", "x-content-type-options": "nosniff" };
+  const range = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || "");
+  if (range && (range[1] || range[2])) {
+    const start = range[1] ? Number(range[1]) : Math.max(0, st.size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), st.size - 1) : st.size - 1;
+    if (start > end || start >= st.size) { res.writeHead(416, { "content-range": `bytes */${st.size}` }); return res.end(); }
+    res.writeHead(206, { ...headers, "content-range": `bytes ${start}-${end}/${st.size}`, "content-length": end - start + 1 });
+    return req.method === "HEAD" ? res.end() : createReadStream(file, { start, end }).pipe(res);
+  }
+  res.writeHead(200, { ...headers, "content-length": st.size });
+  req.method === "HEAD" ? res.end() : createReadStream(file).pipe(res);
+}
+
+function stat(file) { try { return statSync(file); } catch (_) { return null; } }
+function notFound(res) { res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); res.end("Not found"); }
+
+const server = http.createServer((req, res) => {
+  const { pathname } = new URL(req.url, "http://x");
+  Promise.resolve().then(() => PROXY_PATH.test(pathname) ? proxy(req, res) : serveStatic(req, res)).catch(() => {
+    if (!res.headersSent) res.writeHead(502, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "upstream error" }));
+  });
+});
+
+// Websocket subscriptions on /rpc are piped straight to the upstream RPC (RPC_WS_URL, or RPC_URL as ws).
+server.on("upgrade", (req, socket, head) => {
+  const reject = code => { socket.end(`HTTP/1.1 ${code}\r\nconnection: close\r\n\r\n`); };
+  const env = envFor(req), origin = req.headers.origin || "";
+  const allowed = (env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
+  if (new URL(req.url, "http://x").pathname !== "/rpc") return reject("404 Not Found");
+  if (allowed.length && !allowed.includes(origin)) return reject("403 Forbidden");
+  if (!env.RPC_URL) return reject("503 Service Unavailable");
+  const target = new URL(env.RPC_WS_URL || env.RPC_URL.replace(/^http/, "ws"));
+  const secure = target.protocol === "wss:", port = Number(target.port) || (secure ? 443 : 80);
+  const up = secure ? tls.connect(port, target.hostname, { servername: target.hostname }) : net.connect(port, target.hostname);
+  up.once(secure ? "secureConnect" : "connect", () => {
+    const keep = ["upgrade", "connection", "sec-websocket-key", "sec-websocket-version", "sec-websocket-extensions", "sec-websocket-protocol"];
+    const lines = [`GET ${target.pathname}${target.search} HTTP/1.1`, `host: ${target.host}`];
+    for (const k of keep) if (req.headers[k]) lines.push(`${k}: ${req.headers[k]}`);
+    up.write(lines.join("\r\n") + "\r\n\r\n");
+    if (head && head.length) up.write(head);
+    up.pipe(socket); socket.pipe(up);
+  });
+  up.on("error", () => socket.destroy());
+  socket.on("error", () => up.destroy());
+});
+
+server.listen(PORT, () => console.log(`ghostprint on :${PORT}`));

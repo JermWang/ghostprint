@@ -41,6 +41,8 @@ Live at https://ghostprint-black.vercel.app, deployed by Vercel from `main` as p
 
 `worker/` is a Cloudflare Worker that holds the API keys: your paid Solana RPC, Jupiter, the NEAR Intents JWT and X. It also relays Jito. Deploy it (see `worker/README.md`) and set `PROXY_URL` in `config.js`. Every visitor then shares paid capacity instead of being rate limited on free endpoints, and no key ever ships in the page.
 
+`server.mjs` runs the same proxy on a plain Node server (`npm start`, used by Railway). It also serves the site, so the site and proxy share one origin. Set the worker's secrets as environment variables (`RPC_URL`, `RPC_WS_URL`, `JUP_API_KEY`, `ONECLICK_JWT`, `X_BEARER`, optional `ALLOWED_ORIGINS`), then point `PROXY_URL` at the server's URL.
+
 ## Configure
 
 `config.js` holds public values only:
