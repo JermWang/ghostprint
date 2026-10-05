@@ -31,6 +31,22 @@ function socket(url, { onOpen, onMessage, onStatus = () => {}, WS = globalThis.W
   return { close() { closed = true; clearTimeout(timer); try { ws && ws.close(); } catch (_) {} }, send(m) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); } };
 }
 
+// stonk.fun's public API (no key, CORS open, 300 requests a minute per IP): the newest launches, the ones about to
+// graduate and the newly graduated, polled while the page is open. onTokens gets the raw API tokens.
+export const STONK_API = "https://www.stonkfun.xyz/api/public/v1";
+export function stonkFun({ onTokens, onStatus = () => {}, every = 12000, fetch: f = globalThis.fetch.bind(globalThis) }) {
+  let timer = 0, stopped = false;
+  const list = status => f(`${STONK_API}/tokens?${new URLSearchParams({ status, sort: "newest", pageSize: "30" })}`)
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(b => b?.data?.tokens || []);
+  async function pass() {
+    try { onTokens((await Promise.all(["new", "aboutToGraduate", "graduated"].map(list))).flat()); onStatus("live"); }
+    catch (_) { onStatus("unreachable"); }
+    if (!stopped) timer = setTimeout(pass, document.hidden ? every * 3 : every);
+  }
+  pass();
+  return { close() { stopped = true; clearTimeout(timer); } };
+}
+
 // PumpPortal's free streams: every new pump.fun token and every migration.
 export function pumpPortal({ url = PUMPPORTAL_WS, onNewToken, onMigration, onStatus, WS }) {
   return socket(url, {

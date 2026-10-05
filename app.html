@@ -336,7 +336,7 @@ dialog::backdrop{background:rgba(0,0,0,.6)}
 .lk{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:24px;min-width:24px;padding:0 6px;border-radius:7px;background:var(--ink-1);border:1px solid var(--line);color:var(--mute-ink);text-decoration:none;cursor:pointer;font:500 .7rem var(--font-mono);transition:color .12s,border-color .12s,background .12s}
 .lk:hover{color:var(--paper);border-color:var(--ink-3);background:var(--ink-3)}
 .lk.soc{color:var(--paper)}
-.lk-tg:hover{color:#2AABEE}.lk-web:hover{color:var(--up)}.lk-pump:hover{color:#86EFAC}.lk-dex:hover,.lk-eye:hover,.lk-scan:hover,.lk-search:hover{color:var(--warn)}
+.lk-tg:hover{color:#2AABEE}.lk-web:hover{color:var(--up)}.lk-pump:hover{color:#86EFAC}.lk-stonk:hover{color:#4FD18B}.lk-dex:hover,.lk-eye:hover,.lk-scan:hover,.lk-search:hover{color:var(--warn)}
 .lk.done{color:var(--up);border-color:var(--up)}
 .pc-acts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
 .qb{padding:8px 11px;border-radius:9px;background:color-mix(in srgb,var(--accent) 12%,var(--ink-1));border-color:color-mix(in srgb,var(--accent) 35%,var(--ink-3))}
@@ -427,6 +427,7 @@ td.pnl .pb{display:block;height:3px;border-radius:2px;margin:4px 0 0 auto;opacit
     <div class="pulse-top">
       <h1>Pulse</h1>
       <span class="chip" id="pp-status"><span class="dot"></span>pump.fun stream</span>
+      <span class="chip" id="sf-status"><span class="dot"></span>stonk.fun</span>
       <span class="chip" id="curve-status"><span class="dot"></span>curves</span>
       <span class="muted mono" style="font-size:.7rem">Hover a column to pause it · ⚡ buys with your quick-buy amount</span>
       <div class="seg mob-cols" id="mobcols" role="group" aria-label="Column">

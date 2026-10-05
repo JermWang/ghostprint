@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createBoard, fromPumpPortal, fromJupiter, walletSwaps, pnl, isPumpMint } from "../market.js";
+import { createBoard, fromPumpPortal, fromJupiter, fromStonk, walletSwaps, pnl, isPumpMint } from "../market.js";
 
 test("board sorts tokens into New Pairs, Final Stretch and Migrated", () => {
   const b = createBoard({ finalStretch: 60 });
@@ -16,6 +16,10 @@ test("board sorts tokens into New Pairs, Final Stretch and Migrated", () => {
   assert.deepEqual(c.final.map(t => t.symbol), ["FN2", "FIN"]);
   assert.deepEqual(c.migrated.map(t => t.symbol), ["DONE"]);
   assert.deepEqual(b.curveTargets(), ["Dfinal2pump", "Cfinalpump", "Bolderpump", "Anewpump"]);
+  // a token Jupiter already lists as graduated keeps its market cap: its emptied curve isn't read again
+  b.upsert(fromJupiter({ id: "Fgradpump", symbol: "GRAD", mcap: 3_390_000, graduatedPool: "pool", graduatedAt: new Date(now - 60_000).toISOString() }));
+  assert.ok(!b.curveTargets().includes("Fgradpump"));
+  assert.equal(b.tokens.get("Fgradpump").mcapUsd, 3_390_000);
 });
 
 test("board merges updates, filters and expires", () => {
@@ -84,4 +88,18 @@ test("on-chain history merges into the trade log without duplicates", async () =
   const log = [{ sig: "a", mint: "M", time: 5000, side: "buy", sol: 1, tokens: 10 }];
   const merged = mergeHistory(log, [{ sig: "a", mint: "M", time: 5, side: "buy", sol: 1, tokens: 10 }, { sig: "b", mint: "M", time: 9, side: "sell", sol: 2, tokens: 10 }], () => "SYM");
   assert.equal(merged.length, 2); assert.equal(merged[0].sig, "b"); assert.equal(merged[0].time, 9000); assert.equal(merged[0].from, "chain"); assert.equal(merged[0].symbol, "SYM");
+});
+
+test("stonk.fun tokens land in the right Pulse column with their market data", () => {
+  const b = createBoard({ finalStretch: 60 }), now = Date.now(), iso = ms => new Date(ms).toISOString();
+  const api = (mint, status, progress, extra = {}) => ({ mint, name: mint, symbol: mint.toUpperCase(), status, graduationProgress: progress, createdAt: iso(now - 60_000),
+    imageUrl: "/api/asset/x.png", links: { website: "https://www.stonkfun.xyz/", twitter: "https://x.com/stonky" }, quote: { symbol: "NVDAX" },
+    market: { marketCapUsd: 42_000, priceUsd: 0.000042, volume24hUsd: 1234, liquidityUsd: 900 }, ...extra });
+  [api("snew", "new", 0.12), api("sfinal", "aboutToGraduate", 0.81), api("sgrad", "graduated", 1, { graduatedAt: iso(now - 30_000) })].forEach(t => b.upsert(fromStonk(t)));
+  const c = b.columns();
+  assert.deepEqual([c.new, c.final, c.migrated].map(l => l.map(t => t.mint)), [["snew"], ["sfinal"], ["sgrad"]]);
+  const t = b.tokens.get("snew");
+  assert.equal(t.mcapUsd, 42_000); assert.equal(t.progress, 12); assert.equal(t.image, "https://www.stonkfun.xyz/api/asset/x.png");
+  assert.equal(t.website, undefined, "stonk.fun's own site isn't the token's website"); assert.equal(t.twitter, "https://x.com/stonky");
+  assert.deepEqual(b.curveTargets(), [], "stonk.fun tokens aren't pump.fun curves");
 });

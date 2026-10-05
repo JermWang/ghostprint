@@ -46,7 +46,7 @@ export function createBoard({ finalStretch = 60, cap = 60, maxAgeMs = 6 * 3600_0
     },
     // Mints whose curve should be re-read from chain: pump tokens not yet complete, newest first.
     curveTargets(limit = 100) {
-      return [...tokens.values()].filter(t => t.pump && !t.complete && !t.migratedAt)
+      return [...tokens.values()].filter(t => t.pump && !t.complete && !t.migratedAt && !t.graduatedAt)
         .sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, limit).map(t => t.mint);
     },
     prune(now = Date.now()) {
@@ -73,6 +73,23 @@ export function fromPumpPortal(m, solUsd) {
   };
 }
 // Jupiter token objects → board records (fields Jupiter doesn't send stay undefined).
+// stonk.fun launches (Raydium LaunchLab, paired with stocks, memes and other tokens) from its public API.
+// Its graduation progress is a 0..1 fraction; a website pointing back at stonk.fun itself isn't a real social.
+export const STONK = "https://www.stonkfun.xyz";
+export function fromStonk(t) {
+  const m = t.market || {}, links = t.links || {}, created = Date.parse(t.createdAt || "") || undefined;
+  const abs = u => typeof u === "string" && u ? (u.startsWith("/") ? STONK + u : u) : undefined;
+  return {
+    mint: t.mint, name: t.name, symbol: t.symbol, image: abs(t.imageUrl), createdAt: created,
+    stonk: true, launchpad: "stonk.fun", quoteSymbol: t.quote?.symbol, creator: t.creator,
+    mcapUsd: m.marketCapUsd, priceUsd: m.priceUsd, liquidityUsd: m.liquidityUsd, volume24h: m.volume24hUsd,
+    progress: typeof t.graduationProgress === "number" ? Math.min(100, t.graduationProgress * 100) : undefined,
+    graduatedAt: t.status === "graduated" ? (Date.parse(t.graduatedAt || "") || created || Date.now()) : undefined,
+    twitter: socialUrl("twitter", links.twitter), telegram: socialUrl("telegram", links.telegram),
+    website: /stonkfun\.xyz/i.test(links.website || "") ? undefined : socialUrl("website", links.website), source: "stonk"
+  };
+}
+
 export function fromJupiter(t) {
   const created = Date.parse(t.firstPool?.createdAt || t.createdAt || "") || undefined;
   return {

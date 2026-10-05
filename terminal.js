@@ -6,8 +6,8 @@ import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapErr
 import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, newRule, ruleTarget } from "./orders.js";
 import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
-import { createBoard, fromPumpPortal, fromJupiter, pnl, isPumpMint, mergeHistory } from "./market.js";
-import { pumpPortal, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory, onchainMeta, imageSources, identicon, setMediaProxy } from "./feeds.js";
+import { createBoard, fromPumpPortal, fromJupiter, fromStonk, STONK, pnl, isPumpMint, mergeHistory } from "./market.js";
+import { pumpPortal, stonkFun, tokenTrades, readCurves, metadata, holders, recentSwaps, walletHistory, onchainMeta, imageSources, identicon, setMediaProxy } from "./feeds.js";
 import { renderPixels, emblem, pixelSVG, GLYPHS } from "./art.js";
 
 const web3 = window.solanaWeb3;
@@ -288,6 +288,7 @@ const ICO = {
   x: '<path d="M3 2.5h3l7 11h-3z" fill="currentColor" stroke="none"/><path d="M13 2.5 3.2 13.5"/>',
   tg: '<path d="M14 2.6 1.9 7.4l4 1.3 1.5 4.6 2.2-2.5 3.4 2.5z"/><path d="M5.9 8.7 12 4.9"/>',
   web: '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2.3 2.2 2.3 9.8 0 12M8 2c-2.3 2.2-2.3 9.8 0 12"/>',
+  stonk: '<path d="M2 12.5l4-4.2 3 3 5-6"/><path d="M10.5 5.3H14v3.5"/>',
   pump: '<g transform="rotate(-38 8 8)"><rect x="2" y="5.3" width="12" height="5.4" rx="2.7"/><path d="M8 5.3v5.4"/></g>',
   dex: '<path d="M2.5 13.5h11"/><path d="M4.5 11V7.5M8 11V3.5M11.5 11V6"/>',
   eye: '<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>',
@@ -309,6 +310,7 @@ function tokenLinks(mint, info = {}) {
   if (info.telegram) out.push({ k: "tg", label: "Telegram", href: info.telegram, social: true });
   if (info.website) out.push({ k: "web", label: "Website", href: info.website, social: true });
   if (isPumpMint(mint, info.launchpad) || info.pump) out.push({ k: "pump", label: "pump.fun", href: `https://pump.fun/coin/${mint}` });
+  if (info.stonk || info.launchpad === "stonk.fun") out.push({ k: "stonk", label: "stonk.fun", href: `${STONK}/token/${mint}` });
   out.push({ k: "dex", label: "DexScreener", href: `https://dexscreener.com/solana/${mint}` });
   out.push({ k: "eye", label: "Birdeye", href: `https://birdeye.so/token/${mint}?chain=solana` });
   out.push({ k: "scan", label: "Solscan", href: solscan("token", mint) });
@@ -334,7 +336,7 @@ function copyBtn(mint, withLabel) {
 function avatar(cls) { const d = make("div", `av${cls ? " " + cls : ""}`); d.append(make("img", "tok-icon"), make("span", "av-badge")); return d; }
 function setRing(av, t, column) {
   const migrated = column === "migrated" || t.complete || t.graduatedAt || t.migratedAt;
-  const p = migrated ? 100 : t.pump && t.progress != null ? Math.max(0, Math.min(100, t.progress)) : null;
+  const p = migrated ? 100 : (t.pump || t.stonk) && t.progress != null ? Math.max(0, Math.min(100, t.progress)) : null;
   av.style.setProperty("--p", p ?? 0);
   av.classList.toggle("ring", p != null); av.classList.toggle("hot", p != null && p >= 80 && !migrated); av.classList.toggle("grad", !!migrated);
   const badge = av.querySelector(".av-badge"); badge.textContent = migrated ? "✓" : ""; badge.hidden = !migrated;
@@ -370,6 +372,8 @@ const pp = pumpPortal({
     if (watched) toast(`${symbolOf(m.mint)} migrated to ${m.pool || "an AMM"}.`, "info");
   }
 });
+// stonk.fun launches, polled from its public API into the same board
+stonkFun({ onStatus: s => setStatusChip($("sf-status"), s, "stonk.fun"), onTokens: list => { list.forEach(t => t && t.mint && board.upsert(fromStonk(t))); pulseDirty = true; } });
 /* ---------- token metadata ---------- */
 // Tokens that reach the terminal without a name or image (migrations, pasted mints, tokens Jupiter
 // hasn't indexed yet) get them from the chain: metadata account → URI → JSON. Visible tokens first,
@@ -414,7 +418,9 @@ async function curveLoop() {
     try {
       const curves = await readCurves({ connection, web3, mints: targets });
       for (const [mint, c] of curves) if (c.complete && armed.includes(mint)) fireSnipe(mint);
-      for (const [mint, c] of curves) board.upsert({ mint, progress: c.progress, complete: c.complete || undefined, mcapSol: c.mcapSol, mcapUsd: S.solUsd ? c.mcapSol * S.solUsd : undefined, priceUsd: S.solUsd ? c.priceSol * S.solUsd : undefined });
+      // a completed curve has handed its reserves to the AMM, so it no longer prices the token: keep the last real price
+      for (const [mint, c] of curves) board.upsert(c.complete ? { mint, progress: 100, complete: true }
+        : { mint, progress: c.progress, mcapSol: c.mcapSol, mcapUsd: S.solUsd ? c.mcapSol * S.solUsd : undefined, priceUsd: S.solUsd ? c.priceSol * S.solUsd : undefined });
       setStatusChip($("curve-status"), "live", `curves · ${curves.size}`);
       pulseDirty = true;
     } catch (_) { setStatusChip($("curve-status"), "rate limited", "curves"); }
@@ -481,11 +487,11 @@ function updateCard(el, t) {
   if (t.holders) stats.append(stat("users", num(t.holders), "Holders"));
   if (t.topHoldersPct != null) stats.append(stat("crown", `${t.topHoldersPct.toFixed(0)}%`, "Top 10 holders", t.topHoldersPct > 30 ? "warn" : ""));
   if (t.devPct != null) stats.append(stat("dev", `${t.devPct.toFixed(1)}%`, "Dev holds", t.devPct > 5 ? "warn" : ""));
-  else if (t.pump && t.progress != null && column !== "migrated") stats.append(make("span", `curve${t.progress >= 80 ? " hot" : ""}`, `${t.progress.toFixed(0)}%`));
-  const links = el.querySelector(".pc-links"), sig = [t.twitter, t.telegram, t.website, t.pump].join("|");
+  else if ((t.pump || t.stonk) && t.progress != null && column !== "migrated") stats.append(make("span", `curve${t.progress >= 80 ? " hot" : ""}`, `${t.progress.toFixed(0)}%`));
+  const links = el.querySelector(".pc-links"), sig = [t.twitter, t.telegram, t.website, t.pump, t.stonk].join("|");
   if (links.dataset.sig !== sig) {
     links.dataset.sig = sig; links.textContent = "";
-    tokenLinks(t.mint, t).filter(l => l.social || l.k === "pump" || l.k === "dex").forEach(l => links.append(linkBtn(l)));
+    tokenLinks(t.mint, t).filter(l => l.social || l.k === "pump" || l.k === "stonk" || l.k === "dex").forEach(l => links.append(linkBtn(l)));
     links.append(copyBtn(t.mint));
   }
   text(el.querySelector(".qb"), `⚡ ${$("qbamt").value || settings.quickBuy}`);
@@ -589,7 +595,7 @@ function renderTokenHead() {
   icon($("t-icon"), t?.icon || b.image, mint);
   setRing($("t-av"), { ...b, pump: b.pump || isPumpMint(mint, t?.launchpad), progress: T.curve ? T.curve.progress : b.progress, complete: T.curve?.complete || b.complete || !!t?.graduatedPool }, b.migratedAt || t?.graduatedPool ? "migrated" : "");
   document.title = `${sym} · Ghostprint`;
-  const soc = { twitter: t?.twitter || b.twitter, telegram: t?.telegram || b.telegram, website: t?.website || b.website, launchpad: t?.launchpad, pump: b.pump };
+  const soc = { twitter: t?.twitter || b.twitter, telegram: t?.telegram || b.telegram, website: t?.website || b.website, launchpad: t?.launchpad || b.launchpad, pump: b.pump, stonk: b.stonk };
   const links = $("t-links"), sig = JSON.stringify(soc);
   if (links.dataset.sig !== sig || !links.childElementCount) { links.dataset.sig = sig; links.textContent = ""; tokenLinks(mint, soc).forEach(l => links.append(linkBtn(l, true))); }
   const desc = b.description;
