@@ -53,7 +53,12 @@ a{color:inherit}
 .nav-links a:hover{background:var(--paper)}
 .nav-links a.cta{background:var(--ink);color:var(--paper)}
 .nav-links a.cta:hover{background:var(--ink-3)}
-@media (max-width:600px){.nav-links a:not(.cta){display:none}}
+.nav-links a.x-link{display:inline-flex;padding:8px 10px}
+.x-link svg{width:15px;height:15px;display:block}
+@media (max-width:1100px){.nav-links{gap:2px}.nav-links a{padding:8px 8px;letter-spacing:.04em}}
+@media (max-width:900px){.nav-links a[href^="#"]{display:none}}
+@media (max-width:600px){.nav-links a:not(.cta):not(.x-link){display:none}.brand .word{height:14px}.nav{gap:8px}.nav-links{gap:2px}.nav-links a.x-link{padding:8px}.nav-links a.cta{padding:8px 10px;letter-spacing:.04em}}
+@media (max-width:388px){.brand .word{display:none}}
 .word rect{transition:transform .8s cubic-bezier(.2,.8,.2,1),opacity .5s ease}
 
 /* hero */
@@ -228,6 +233,7 @@ footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;l
       <a href="#token">Token</a>
       <a href="#trace">Exposure</a>
       <a href="./docs.html">Docs</a>
+      <a class="x-link" href="https://x.com/ghostprintxyz" target="_blank" rel="noopener" aria-label="Ghostprint on X" title="Ghostprint on X"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg></a>
       <a class="cta" href="./app.html">Launch terminal</a>
     </nav>
   </header>
