@@ -1,11 +1,19 @@
 // Live data for the terminal. Network only; parsing lives in pump.js and market.js.
 import { bondingCurveAddress, decodeCurve, tradesFromLogs, tradesFromTx, fromBase64, eventPriceSol, PUMP_PROGRAM } from "./pump.js";
-import { base58Decode } from "./trace.js";
+import { base58Decode, rpcClient, TX_OPTS } from "./trace.js";
 import { walletSwaps, SOL_MINT } from "./market.js";
 import { imageSources, socialUrl, decodeMetaplex, decodeToken2022Meta, METAPLEX, TOKEN_2022 } from "./media.js";
 export { GATEWAYS, ipfsPath, imageSources, socialUrl, setMediaProxy, decodeMetaplex, decodeToken2022Meta, METAPLEX, identicon } from "./media.js";
 
 export const PUMPPORTAL_WS = "wss://pumpportal.fun/api/data";
+
+// Transactions come back jsonParsed over plain JSON-RPC: the bundled @solana/web3.js only reads versions
+// legacy and 0, and refuses the version 1 transactions much of mainnet now sends. One client per RPC URL.
+const txClients = new Map();
+export function fetchTransaction(url, sig) {
+  if (!txClients.has(url)) txClients.set(url, rpcClient(url, { retries: 2 }));
+  return txClients.get(url).call("getTransaction", [sig, TX_OPTS]);
+}
 
 // A websocket that reconnects with backoff and re-sends its subscriptions.
 function socket(url, { onOpen, onMessage, onStatus = () => {}, WS = globalThis.WebSocket }) {
@@ -40,14 +48,14 @@ export const wsUrl = httpUrl => httpUrl.replace(/^http/, "ws");
 
 // Live trades for one token. pump.fun curve trades are decoded straight from the logs; anything else
 // (PumpSwap, Raydium, Meteora…) is read from the transaction, rate limited, newest first.
-export function tokenTrades({ rpcHttp, connection, web3, mint, onTrade, onStatus, WS, solUsd = () => null, maxFetch = 2, queueCap = 12 }) {
+export function tokenTrades({ rpcHttp, mint, onTrade, onStatus, WS, solUsd = () => null, maxFetch = 2, queueCap = 12 }) {
   const queue = [];
   let active = 0, stopped = false;
   const pump = () => {
     while (!stopped && active < maxFetch && queue.length) {
       const sig = queue.shift();
       active++;
-      connection.getTransaction(sig, { maxSupportedTransactionVersion: 0, commitment: "confirmed" })
+      fetchTransaction(rpcHttp, sig)
         .then(tx => tx && fromTransaction(tx, sig))
         .catch(() => {})
         .finally(() => { active--; pump(); });
@@ -57,10 +65,8 @@ export function tokenTrades({ rpcHttp, connection, web3, mint, onTrade, onStatus
     const evs = tradesFromTx({ meta: tx.meta }, base58Decode).filter(e => e.mint === mint);
     if (evs.length) return evs.forEach(e => onTrade(eventTrade(e, sig)));
     // generic swap: the fee payer's token and SOL change
-    const keys = tx.transaction.message.staticAccountKeys || tx.transaction.message.accountKeys;
-    const signer = keys[0].toBase58 ? keys[0].toBase58() : String(keys[0]);
-    const parsed = { blockTime: tx.blockTime, transaction: { signatures: [sig], message: { accountKeys: keys.map((k, i) => ({ pubkey: k.toBase58 ? k.toBase58() : String(k), signer: i === 0 })), instructions: [{ programId: "x" }] } }, meta: tx.meta };
-    for (const s of walletSwaps(parsed, signer, { solUsd: solUsd() })) if (s.mint === mint && s.tokens) onTrade({ sig, time: s.time || Math.floor(Date.now() / 1000), user: signer, side: s.side, sol: s.sol, tokens: s.tokens, priceSol: s.sol / s.tokens });
+    const signer = tx.transaction.message.accountKeys[0].pubkey;
+    for (const s of walletSwaps(tx, signer, { solUsd: solUsd() })) if (s.mint === mint && s.tokens) onTrade({ sig, time: s.time || Math.floor(Date.now() / 1000), user: signer, side: s.side, sol: s.sol, tokens: s.tokens, priceSol: s.sol / s.tokens });
   };
   const sub = socket(wsUrl(rpcHttp), {
     WS, onStatus,
@@ -178,9 +184,9 @@ export async function recentSwaps({ connection, web3, wallet, seen, solUsd, limi
   const sigs = await connection.getSignaturesForAddress(new web3.PublicKey(wallet), { limit });
   const fresh = sigs.filter(s => !s.err && !seen.has(s.signature));
   fresh.forEach(s => seen.add(s.signature));
-  const txs = await Promise.all(fresh.map(s => connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" }).catch(() => null)));
+  const txs = await Promise.all(fresh.map(s => fetchTransaction(connection.rpcEndpoint, s.signature).catch(() => null)));
   const out = [];
-  txs.forEach((tx, i) => { if (!tx) return; const json = JSON.parse(JSON.stringify(tx)); json.transaction.signatures = [fresh[i].signature]; out.push(...walletSwaps(json, wallet, { solUsd })); });
+  txs.forEach(tx => { if (tx) out.push(...walletSwaps(tx, wallet, { solUsd })); });
   return out;
 }
 export { SOL_MINT };
@@ -193,8 +199,8 @@ export async function walletHistory({ connection, web3, wallet, limit = 100, bef
   let done = 0;
   for (let i = 0; i < sigs.length; i += concurrency) {
     const batch = sigs.slice(i, i + concurrency);
-    const txs = await Promise.all(batch.map(s => connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" }).catch(() => null)));
-    txs.forEach((tx, j) => { if (!tx) return; const json = JSON.parse(JSON.stringify(tx)); json.transaction.signatures = [batch[j].signature]; out.push(...walletSwaps(json, wallet)); });
+    const txs = await Promise.all(batch.map(s => fetchTransaction(connection.rpcEndpoint, s.signature).catch(() => null)));
+    txs.forEach(tx => { if (tx) out.push(...walletSwaps(tx, wallet)); });
     onProgress((done += batch.length), sigs.length);
   }
   return { swaps: out, last: sigs.length ? sigs[sigs.length - 1].signature : null };

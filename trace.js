@@ -102,7 +102,8 @@ export function rpcClient(url, { fetch: f = globalThis.fetch.bind(globalThis), c
 }
 
 /* ---------- collection ---------- */
-const TX_OPTS = { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" };
+// Version 1 is the newest transaction format on mainnet; asking for less makes the node refuse those.
+export const TX_OPTS = { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" };
 
 async function signatures(rpc, address, maxPages, pageSize = 1000) {
   const all = [];

@@ -80,7 +80,12 @@ export function createWorld(seed = 7) {
         if (opt.before) start = list.findIndex(x => x.signature === opt.before) + 1;
         return list.slice(start, start + (opt.limit || 1000));
       }
-      case "getTransaction": return txs.get(params[0]) || null;
+      case "getTransaction": {
+        // like a mainnet node: every transaction here is version 1, refused unless the caller accepts it
+        const tx = txs.get(params[0]);
+        if (tx && (params[1]?.maxSupportedTransactionVersion ?? -1) < 1) throw new Error("Transaction version (1) is not supported by the requesting client");
+        return tx || null;
+      }
       case "getBalance": return { context: { slot: 1 }, value: balances.get(params[0]) || 0 };
       case "getTokenAccountsByOwner": {
         const n = params[1].programId === TOKEN ? tokens.get(params[0]) || 0 : 0;

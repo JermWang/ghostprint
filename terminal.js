@@ -571,7 +571,7 @@ async function openToken(mint) {
   loadPairs(mint);
   if (isPumpMint(mint, b.launchpad) || b.pump) curveTick(mint);
   refreshTokenBal();
-  T.sub = tokenTrades({ rpcHttp: rpcUrl, connection, web3, mint, solUsd: () => S.solUsd, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
+  T.sub = tokenTrades({ rpcHttp: rpcUrl, mint, solUsd: () => S.solUsd, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
     if (S.tokenMint !== mint || T.trades.some(x => x.sig === tr.sig && x.side === tr.side && x.tokens === tr.tokens)) return;
     T.trades.unshift({ ...tr, fresh: true }); T.trades.length = Math.min(T.trades.length, 120);
     if (tr.priceSol && S.solUsd) { T.priceUsd = tr.priceSol * S.solUsd; text($("s-price"), price(T.priceUsd)); }
