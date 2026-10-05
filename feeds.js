@@ -40,7 +40,7 @@ export const wsUrl = httpUrl => httpUrl.replace(/^http/, "ws");
 
 // Live trades for one token. pump.fun curve trades are decoded straight from the logs; anything else
 // (PumpSwap, Raydium, Meteora…) is read from the transaction, rate limited, newest first.
-export function tokenTrades({ rpcHttp, connection, web3, mint, onTrade, onStatus, WS, maxFetch = 2, queueCap = 12 }) {
+export function tokenTrades({ rpcHttp, connection, web3, mint, onTrade, onStatus, WS, solUsd = () => null, maxFetch = 2, queueCap = 12 }) {
   const queue = [];
   let active = 0, stopped = false;
   const pump = () => {
@@ -60,7 +60,7 @@ export function tokenTrades({ rpcHttp, connection, web3, mint, onTrade, onStatus
     const keys = tx.transaction.message.staticAccountKeys || tx.transaction.message.accountKeys;
     const signer = keys[0].toBase58 ? keys[0].toBase58() : String(keys[0]);
     const parsed = { blockTime: tx.blockTime, transaction: { signatures: [sig], message: { accountKeys: keys.map((k, i) => ({ pubkey: k.toBase58 ? k.toBase58() : String(k), signer: i === 0 })), instructions: [{ programId: "x" }] } }, meta: tx.meta };
-    for (const s of walletSwaps(parsed, signer)) if (s.mint === mint && s.tokens) onTrade({ sig, time: s.time || Math.floor(Date.now() / 1000), user: signer, side: s.side, sol: s.sol, tokens: s.tokens, priceSol: s.sol / s.tokens });
+    for (const s of walletSwaps(parsed, signer, { solUsd: solUsd() })) if (s.mint === mint && s.tokens) onTrade({ sig, time: s.time || Math.floor(Date.now() / 1000), user: signer, side: s.side, sol: s.sol, tokens: s.tokens, priceSol: s.sol / s.tokens });
   };
   const sub = socket(wsUrl(rpcHttp), {
     WS, onStatus,
@@ -174,13 +174,13 @@ export async function holders({ connection, web3, mint, creator }) {
 }
 
 // Recent swaps by a wallet (wallet tracker), newest first, skipping signatures already seen.
-export async function recentSwaps({ connection, web3, wallet, seen, limit = 8 }) {
+export async function recentSwaps({ connection, web3, wallet, seen, solUsd, limit = 8 }) {
   const sigs = await connection.getSignaturesForAddress(new web3.PublicKey(wallet), { limit });
   const fresh = sigs.filter(s => !s.err && !seen.has(s.signature));
   fresh.forEach(s => seen.add(s.signature));
   const txs = await Promise.all(fresh.map(s => connection.getParsedTransaction(s.signature, { maxSupportedTransactionVersion: 0, commitment: "confirmed" }).catch(() => null)));
   const out = [];
-  txs.forEach((tx, i) => { if (!tx) return; const json = JSON.parse(JSON.stringify(tx)); json.transaction.signatures = [fresh[i].signature]; out.push(...walletSwaps(json, wallet)); });
+  txs.forEach((tx, i) => { if (!tx) return; const json = JSON.parse(JSON.stringify(tx)); json.transaction.signatures = [fresh[i].signature]; out.push(...walletSwaps(json, wallet, { solUsd })); });
   return out;
 }
 export { SOL_MINT };

@@ -10,6 +10,31 @@ import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import worker from "./worker/src/index.js";
 
+// Stand-in for Cloudflare's edge cache (caches.default), which the worker uses for Jupiter token lists and
+// prices, X searches and IPFS reads. In memory, honors max-age, evicts the oldest entries past the cap.
+const CACHE_CAP = 64 * 2 ** 20, ENTRY_CAP = 4 * 2 ** 20;
+const mem = new Map();
+let memBytes = 0;
+const dropEntry = k => { memBytes -= mem.get(k).body.byteLength; mem.delete(k); };
+globalThis.caches ??= { default: {
+  async match(key) {
+    const k = String(key.url || key), e = mem.get(k);
+    if (!e) return undefined;
+    if (e.expires < Date.now()) { dropEntry(k); return undefined; }
+    return new Response(e.body, { status: e.status, headers: e.headers });
+  },
+  async put(key, res) {
+    const k = String(key.url || key), maxAge = Number(/max-age=(\d+)/.exec(res.headers.get("cache-control") || "")?.[1] || 0);
+    if (!maxAge) return;
+    const body = await res.arrayBuffer();
+    if (body.byteLength > ENTRY_CAP) return;
+    if (mem.has(k)) dropEntry(k);
+    mem.set(k, { body, status: res.status, headers: [...res.headers], expires: Date.now() + maxAge * 1000 });
+    memBytes += body.byteLength;
+    for (const old of mem.keys()) { if (memBytes <= CACHE_CAP) break; dropEntry(old); }
+  }
+} };
+
 const ROOT = fileURLToPath(new URL(".", import.meta.url));
 const PORT = Number(process.env.PORT) || 5178;
 const PROXY_PATH = /^\/(rpc|jito|health|x\/search)$|^\/(jup|1click|ipfs)\//;

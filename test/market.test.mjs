@@ -49,6 +49,24 @@ test("wallet tracker reads a swap: token in, SOL out", () => {
   assert.deepEqual(walletSwaps(tx, "Someone"), []);
 });
 
+test("wallet tracker skips swaps without a SOL price: arbitrage, stablecoin legs, SOL moving the wrong way", () => {
+  const W = "Wallet1111111111111111111111111111111111111", MINT = "Mint11111111111111111111111111111111111111", USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+  const keys = [{ pubkey: W, signer: true }, { pubkey: "Acct1" }, { pubkey: "Acct2" }];
+  const mk = (pre, post, toks, fee = 5000) => ({ blockTime: 1, transaction: { signatures: ["s"], message: { accountKeys: keys, instructions: [{ programId: "Amm", data: "x", accounts: [] }] } },
+    meta: { fee, preBalances: [pre, 0, 0], postBalances: [post, 0, 0], preTokenBalances: [], postTokenBalances: toks.map(([i, mint, amt]) => ({ accountIndex: i, mint, owner: W, uiTokenAmount: { uiAmount: amt, decimals: 6 } })) } });
+  // arbitrage: tokens in, nothing spent but the (priority) fee
+  assert.deepEqual(walletSwaps(mk(1e9, 1e9 - 900000, [[1, MINT, 395]], 900000), W), []);
+  // SOL in, token and USDC out of the same transaction
+  assert.deepEqual(walletSwaps(mk(2e9, 1e9, [[1, MINT, 235], [2, USDC, 40]]), W), []);
+  // bought with USDC: valued in SOL only when the caller knows the SOL price
+  const usdcBuy = mk(1e9, 1e9 - 5000, [[1, MINT, 1000]]);
+  usdcBuy.meta.preTokenBalances = [{ accountIndex: 2, mint: USDC, owner: W, uiTokenAmount: { uiAmount: 60, decimals: 6 } }];
+  assert.deepEqual(walletSwaps(usdcBuy, W), []);
+  assert.deepEqual(walletSwaps(usdcBuy, W, { solUsd: 120 }), [{ sig: "s", time: 1, wallet: W, mint: MINT, side: "buy", tokens: 1000, sol: 0.5 }]);
+  // the transaction fee is not part of the trade
+  assert.deepEqual(walletSwaps(mk(2e9, 1.5e9 - 5000, [[1, MINT, 100]]), W), [{ sig: "s", time: 1, wallet: W, mint: MINT, side: "buy", tokens: 100, sol: 0.5 }]);
+});
+
 test("PnL: average cost, realized and unrealized", () => {
   const rows = pnl([
     { mint: "A", symbol: "A", side: "buy", sol: 1, tokens: 1000 },

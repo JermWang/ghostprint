@@ -90,15 +90,22 @@ export function fromJupiter(t) {
 }
 
 /* ---------- wallet tracker ---------- */
-// The swaps a wallet made in one transaction: every non-quote token whose balance it changed while
-// signing, priced by the SOL (plus wrapped SOL) that moved the other way.
-export function walletSwaps(tx, wallet) {
+// The swap a wallet made in one transaction: the one token whose balance it changed while signing,
+// priced by the SOL (plus wrapped SOL) that moved the other way.
+export function walletSwaps(tx, wallet, { solUsd } = {}) {
   const x = readTx(tx, wallet);
   if (!x.ownerSigned || x.basicOnly) return [];
-  const wsol = x.tokenDeltas[SOL_MINT] || 0;
-  const sol = x.solDelta / 1e9 + wsol;
-  return Object.entries(x.tokenDeltas).filter(([m, d]) => !QUOTES.has(m) && d !== 0)
-    .map(([mint, d]) => ({ sig: x.sig, time: x.time, wallet, mint, side: d > 0 ? "buy" : "sell", tokens: Math.abs(d), sol: Math.abs(sol) }));
+  // A swap of one token against SOL, or against USDC/USDT when solUsd is given to value them in SOL.
+  // Arbitrage loops and token-for-token routes move more than one token and their SOL change is mostly
+  // fees, so they're skipped rather than shown as trades worth nothing.
+  const moved = Object.entries(x.tokenDeltas).filter(([m, d]) => m !== SOL_MINT && d !== 0);
+  const tokens = moved.filter(([m]) => !QUOTES.has(m)), stable = moved.filter(([m]) => QUOTES.has(m));
+  if (tokens.length !== 1 || (stable.length && !solUsd)) return [];
+  const [mint, d] = tokens[0];
+  const fee = tx.transaction.message.accountKeys.findIndex(k => (typeof k === "string" ? k : k.pubkey) === wallet) === 0 ? (tx.meta?.fee || 0) : 0;
+  const sol = (x.solDelta + fee) / 1e9 + (x.tokenDeltas[SOL_MINT] || 0) + stable.reduce((n, [, v]) => n + v, 0) / (solUsd || 1);
+  if (d > 0 ? sol > -1e-6 : sol < 1e-6) return [];
+  return [{ sig: x.sig, time: x.time, wallet, mint, side: d > 0 ? "buy" : "sell", tokens: Math.abs(d), sol: Math.abs(sol) }];
 }
 
 /* ---------- PnL ---------- */

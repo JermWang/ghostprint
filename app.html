@@ -68,7 +68,7 @@ button,input,select{font:inherit;color:inherit}
 .search input{width:100%;padding:8px 12px 8px 32px;border-radius:999px}
 .search svg{position:absolute;left:11px;top:50%;width:13px;height:13px;transform:translateY(-50%);color:var(--mute-ink)}
 .search kbd{position:absolute;right:10px;top:50%;transform:translateY(-50%);font:.64rem var(--font-mono);color:var(--mute-ink);border:1px solid var(--ink-3);border-radius:4px;padding:0 5px}
-.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--ink-1);border:1px solid var(--ink-3);border-radius:12px;padding:6px;list-style:none;margin:0;max-height:420px;overflow:auto;box-shadow:0 24px 48px -24px #000;z-index:40}
+.results{position:absolute;left:0;right:0;min-width:min(380px,calc(100vw - 24px));top:calc(100% + 6px);background:var(--ink-1);border:1px solid var(--ink-3);border-radius:12px;padding:6px;list-style:none;margin:0;max-height:420px;overflow:auto;box-shadow:0 24px 48px -24px #000;z-index:40}
 .results li button{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:7px 8px;cursor:pointer}
 .results li button:hover,.results li button[aria-selected="true"]{background:var(--ink-2)}
 .results .sym{font-weight:600}

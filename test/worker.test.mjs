@@ -25,6 +25,12 @@ test("rpc: forwards allowed methods with the secret URL, refuses others", async 
   } finally { f.restore(); }
 });
 
+test("preflight allows the solana-client header that @solana/web3.js sends on every RPC call", async () => {
+  const r = await worker.fetch(new Request("https://p.test/rpc", { method: "OPTIONS", headers: { ...ORIGIN, "access-control-request-headers": "content-type,solana-client" } }), env, ctx);
+  assert.equal(r.status, 204);
+  assert.deepEqual(r.headers.get("access-control-allow-headers").split(",").map(s => s.trim()).sort(), ["content-type", "solana-client"]);
+});
+
 test("origins outside the allowlist are refused", async () => {
   const r = await worker.fetch(new Request("https://p.test/health", { headers: { origin: "https://evil.test" } }), env, ctx);
   assert.equal(r.status, 403);

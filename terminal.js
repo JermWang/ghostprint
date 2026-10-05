@@ -571,7 +571,7 @@ async function openToken(mint) {
   loadPairs(mint);
   if (isPumpMint(mint, b.launchpad) || b.pump) curveTick(mint);
   refreshTokenBal();
-  T.sub = tokenTrades({ rpcHttp: rpcUrl, connection, web3, mint, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
+  T.sub = tokenTrades({ rpcHttp: rpcUrl, connection, web3, mint, solUsd: () => S.solUsd, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
     if (S.tokenMint !== mint || T.trades.some(x => x.sig === tr.sig && x.side === tr.side && x.tokens === tr.tokens)) return;
     T.trades.unshift({ ...tr, fresh: true }); T.trades.length = Math.min(T.trades.length, 120);
     if (tr.priceSol && S.solUsd) { T.priceUsd = tr.priceSol * S.solUsd; text($("s-price"), price(T.priceUsd)); }
@@ -1247,7 +1247,7 @@ async function trackerPass() {
     const first = !seenSigs.has(w.address);
     if (first) seenSigs.set(w.address, new Set());
     try {
-      const swaps = await recentSwaps({ connection, web3, wallet: w.address, seen: seenSigs.get(w.address), limit: first ? 10 : 6 });
+      const swaps = await recentSwaps({ connection, web3, wallet: w.address, seen: seenSigs.get(w.address), solUsd: S.solUsd, limit: first ? 10 : 6 });
       if (!swaps.length) continue;
       await lookupTokens(swaps.map(s => s.mint));
       for (const s of swaps) {

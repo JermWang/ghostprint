@@ -40,7 +40,7 @@ export default {
     const refOrigin = (() => { try { return new URL(req.headers.get("referer") || "").origin; } catch (_) { return ""; } })();
     const isIpfs = url.pathname.startsWith("/ipfs/");
     const originOk = !allowed.length || allowed.includes(origin) || (isIpfs && !origin && allowed.includes(refOrigin));
-    const cors = { "access-control-allow-origin": originOk && origin ? origin : allowed.length ? "null" : "*", "access-control-allow-headers": "content-type", "access-control-allow-methods": "GET,POST,OPTIONS", vary: "origin" };
+    const cors = { "access-control-allow-origin": originOk && origin ? origin : allowed.length ? "null" : "*", "access-control-allow-headers": "content-type, solana-client", "access-control-allow-methods": "GET,POST,OPTIONS", vary: "origin" };
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
     if (!originOk) return json({ error: "origin not allowed" }, 403, cors);
     const ip = req.headers.get("cf-connecting-ip") || "anon";
