@@ -82,7 +82,7 @@ if (post.note) { const n = box("note", {}, copy); n.innerHTML = post.note; }
 const foot = box("foot", wide ? { left: pad + "px", bottom: "60px" } : { left: pad + "px", bottom: "52px" });
 if (post.voxel && !wide) foot.style.color = C.INK;
 foot.appendChild(px(GLYPHS.ghost, 26)); foot.appendChild(px(wordRows("GHOSTPRINT"), 20)); foot.appendChild(document.createElement("i"));
-foot.insertAdjacentText("beforeend", "ghostprint-black.vercel.app");
+foot.insertAdjacentText("beforeend", "ghostprint.xyz");
 
 // the drawing
 const svg = svgEl("0 0 10 10", post.h1.replace(/<br>/g, " "));
