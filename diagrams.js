@@ -86,13 +86,13 @@ export function overview(svg, narrow = false) {
   return fit(svg);
 }
 
-// The optional proxy: the browser calls one Worker, which adds the keys and forwards.
+// The relay: the browser calls one server, which adds the keys and forwards.
 export function proxy(svg) {
   flow(svg, {
     ox: 0, oy: 0,
     nodes: [
       N("you", 0, 0, { label: "BROWSER", sub: "no keys", glyph: "ghost", h: 40 }),
-      N("worker", 160, 0, { label: "WORKER", sub: "holds the keys", w: 76, d: 76, h: 52, tone: "ink", glyph: "key" }),
+      N("worker", 160, 0, { label: "RELAY", sub: "holds the keys", w: 76, d: 76, h: 52, tone: "ink", glyph: "key" }),
       N("rpc", 320, 0, { label: "RPC", h: 32, w: 52, d: 52 }),
       N("jup", 320, -95, { label: "JUPITER", h: 32, w: 52, d: 52 }),
       N("near", 320, -190, { label: "1CLICK", h: 32, w: 52, d: 52 }),

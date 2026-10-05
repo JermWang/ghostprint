@@ -183,7 +183,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
     </div>
     <figure class="fig" style="margin:0">
       <div class="art"><svg data-diagram="overview" role="img" aria-label="Your browser at the centre, connected to Solana RPC, Jupiter, NEAR 1Click, PumpPortal, Jito and DexScreener"></svg></div>
-      <figcaption><b>Your browser is the app.</b> It talks to each service directly. There is no Ghostprint server holding funds, keys or orders.</figcaption>
+      <figcaption><b>Your browser is the app.</b> It builds every transaction, and you sign it. Ghostprint's relay only forwards requests to the RPC, Jupiter and NEAR Intents with its API keys. No Ghostprint server holds funds, wallet keys or orders.</figcaption>
     </figure>
   </div>
 
@@ -364,7 +364,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
       <section id="exposure">
         <p class="eyebrow"><span data-pixel="clock"></span>Exposure</p>
         <h2>What trackers already know.</h2>
-        <p>Exposure reads any wallet's public history and scores how linkable it is, 0 to 100, the way commercial trackers score it. It's read-only: nothing to connect or sign, and your browser queries the RPC node directly.</p>
+        <p>Exposure reads any wallet's public history and scores how linkable it is, 0 to 100, the way commercial trackers score it. It's read-only: nothing to connect or sign. Your browser sends its queries through Ghostprint's relay to the RPC node, or straight to your own node if you set one under RPC node.</p>
         <div class="icons">
           <div class="icon-card"><div class="art" data-icon="funding"></div><div class="t"><b>Funding</b><span>Who sent the first SOL, and which other wallets they funded.</span></div></div>
           <div class="icon-card"><div class="art" data-icon="serial"></div><div class="t"><b>Identity</b><span>Deposits to or withdrawals from known exchange wallets.</span></div></div>
@@ -378,12 +378,12 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
       <section id="proxy">
         <p class="eyebrow"><span data-pixel="bolt"></span>Infrastructure</p>
         <h2>Keys stay off the page.</h2>
-        <p>Anything in a static site is public, so API keys can't live in it. By default each browser calls free public endpoints from its own IP. For scale, Ghostprint ships a small Cloudflare Worker (<code>worker/</code>) that holds the keys and forwards requests:</p>
+        <p>Anything in a static site is public, so API keys can't live in it. Instead every browser sends its requests to Ghostprint's relay, a small server that holds the keys and forwards them, so all visitors share paid capacity instead of free, rate-limited endpoints:</p>
         <figure class="fig">
-          <div class="art"><svg data-diagram="proxy" role="img" aria-label="The browser calls one worker, which adds API keys and forwards to RPC, Jupiter, 1Click and X"></svg></div>
-          <figcaption><b>The proxy</b> adds a private RPC URL, the Jupiter key, the NEAR Intents partner key and an X token. It also serves token images from IPFS, cached at Cloudflare's edge. It only forwards: it never sees a private key or signs anything.</figcaption>
+          <div class="art"><svg data-diagram="proxy" role="img" aria-label="The browser calls one relay, which adds API keys and forwards to RPC, Jupiter, 1Click and X"></svg></div>
+          <figcaption><b>The relay</b> adds a private RPC URL, the Jupiter key, the NEAR Intents partner key and an X token. It also serves token images from IPFS, cached on the relay. It only forwards: it never sees a private key, signs anything or records which wallets you look up.</figcaption>
         </figure>
-        <p>Set <code>PROXY_URL</code> in <code>config.js</code> to turn it on. You can also paste your own RPC URL (Helius, Triton, QuickNode) in Settings for faster reads.</p>
+        <p>Rather not go through the relay for reads? Paste your own RPC URL (Helius, Triton, QuickNode) in the terminal's Settings, or under RPC node on Exposure, and your browser reads the chain from that node directly.</p>
       </section>
 
       <section id="token">
@@ -437,7 +437,7 @@ footer .word{height:14px;width:auto;margin-top:14px;display:block}
       <section id="faq">
         <p class="eyebrow"><span data-pixel="file"></span>FAQ</p>
         <h2>Questions.</h2>
-        <details class="faq"><summary>Can Ghostprint take my funds?</summary><div><p>No. It has no server holding funds or keys. Every transaction is built in your browser and signed by you or by a key derived from your own signature. Ghost funds in transit are held by NEAR Intents and refunded to you if a route fails.</p></div></details>
+        <details class="faq"><summary>Can Ghostprint take my funds?</summary><div><p>No. It has no server holding funds or wallet keys, and its relay only forwards requests: it never signs anything. Every transaction is built in your browser and signed by you or by a key derived from your own signature. Ghost funds in transit are held by NEAR Intents and refunded to you if a route fails.</p></div></details>
         <details class="faq"><summary>Why did my trade fail?</summary><div><p>Usually the price moved past your slippage, or the transaction didn't land before it expired. Nothing but the network fee is spent when a swap fails. Try a faster preset or more slippage.</p></div></details>
         <details class="faq"><summary>Is Ghost mode anonymous?</summary><div><p>No tool makes you anonymous. Ghost mode removes the direct on-chain link between your wallet and the wallet that buys. Timing and amounts can still be matched by someone watching closely, so vary them.</p></div></details>
         <details class="faq"><summary>Where are my instant and ghost wallets if I clear my browser?</summary><div><p>Their keys were never stored, so nothing is lost. Connect the same main wallet, sign the same message, and they come back with their balances. Clearing the browser also deletes the local list linking your ghosts to your main wallet; the terminal finds them again on-chain.</p></div></details>
