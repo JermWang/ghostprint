@@ -102,6 +102,14 @@ const jitoUrl = PROXY ? `${PROXY}/jito` : JITO_URL;
 const trig = triggerApi(jup);
 const S = { solUsd: null, wallet: null, seed: null, instant: null, sol: null, instantSol: null, busy: false, route: null };
 
+// Polling and streams run only while someone can see the terminal. A loop that wakes in a hidden tab parks
+// instead of rescheduling, and coming back to the tab restarts every parked loop at once (see the
+// visibilitychange handler at the bottom). Autopilot rules and armed snipes are the exception: they exist
+// to act while nobody is looking, so the work they need keeps running.
+const awake = () => !document.hidden;
+const parked = new Set();
+const whenAwake = fn => { if (awake()) return true; parked.add(fn); return false; };
+
 async function refreshSolPrice() {
   try {
     const p = await jup.prices([SOL_MINT]);
@@ -378,12 +386,13 @@ function seedPulse() {
     pulseDirty = true;
   }).catch(() => {});
 }
-const pp = pumpPortal({
+let pp = null;
+const startPumpPortal = () => pumpPortal({
   onStatus: s => setStatusChip($("pp-status"), s, "pump.fun stream"),
   onNewToken: m => {
     const t = board.upsert(fromPumpPortal(m, S.solUsd));
     t.fresh = true; pulseDirty = true;
-    metadata(m.uri).then(meta => applyMeta(m.mint, meta));
+    if (awake()) metadata(m.uri).then(meta => applyMeta(m.mint, meta)); // hidden: enrich fetches it on return
   },
   onMigration: m => {
     fireSnipe(m.mint);
@@ -412,6 +421,7 @@ function applyMeta(mint, m) {
   if (S.route === "token" && S.tokenMint === mint) renderTokenHead();
 }
 async function enrich() {
+  if (!whenAwake(enrich)) return;
   try {
     if (S.route === "pulse") { const c = board.columns(); needMeta([...c.new, ...c.final, ...c.migrated].filter(t => !t.image || !t.symbol).map(t => t.mint)); }
     const now = Date.now();
@@ -434,6 +444,7 @@ async function enrich() {
 // refresh every minute. Market cap, volume and liquidity from the token's own source are kept.
 const statsAt = new Map();
 async function statsLoop() {
+  if (!whenAwake(statsLoop)) return;
   try {
     if (S.route === "pulse") {
       const c = board.columns(), now = Date.now();
@@ -462,7 +473,9 @@ function setStatusChip(el, s, label) {
 
 async function curveLoop() {
   const armed = snipes().filter(x => x.status === "armed").map(x => x.mint);
-  const targets = [...new Set([...armed, ...board.curveTargets(100)])].slice(0, 100);
+  // hidden: only the curves an armed snipe is waiting on
+  if (!awake() && !armed.length) { parked.add(curveLoop); return; }
+  const targets = [...new Set([...armed, ...(awake() ? board.curveTargets(100) : [])])].slice(0, 100);
   if (targets.length) {
     try {
       const curves = await readCurves({ connection, web3, mints: targets });
@@ -568,7 +581,7 @@ $("mobcols").addEventListener("click", e => {
 let trCat = "toptrending", trInt = "1h", trTimer = 0;
 async function loadTrending() {
   clearTimeout(trTimer);
-  if (S.route !== "trending") return;
+  if (S.route !== "trending" || !whenAwake(loadTrending)) return;
   const table = $("tr-table");
   if (!table.rows.length) { table.textContent = ""; emptyRow(table, "Loading…"); }
   try {
@@ -627,13 +640,17 @@ async function openToken(mint) {
   loadPairs(mint);
   if (isPumpMint(mint, b.launchpad) || b.pump) curveTick(mint);
   refreshTokenBal();
+  openTradeStream(mint);
+  T.statsTimer = setInterval(() => awake() && loadPairs(mint, true), 30000);
+}
+function openTradeStream(mint) {
+  T.sub?.close();
   T.sub = tokenTrades({ rpcHttp: rpcUrl, mint, solUsd: () => S.solUsd, onStatus: s => { T.stream = s; if (!T.trades.length) renderTrades(); }, onTrade: tr => {
     if (S.tokenMint !== mint || T.trades.some(x => x.sig === tr.sig && x.side === tr.side && x.tokens === tr.tokens)) return;
     T.trades.unshift({ ...tr, fresh: true }); T.trades.length = Math.min(T.trades.length, 120);
     if (tr.priceSol && S.solUsd) { T.priceUsd = tr.priceSol * S.solUsd; text($("s-price"), price(T.priceUsd)); }
     renderTrades();
   } });
-  T.statsTimer = setInterval(() => loadPairs(mint, true), 30000);
 }
 leaveToken = () => { T.sub?.close(); T.sub = null; clearTimeout(T.curveTimer); clearInterval(T.statsTimer); clearTimeout(T.quoteTimer); };
 
@@ -679,7 +696,7 @@ async function loadPairs(mint, statsOnly) {
   } catch (_) { if (!statsOnly && S.tokenMint === mint) { $("chart").textContent = ""; $("chart").append(make("div", "empty", "Chart unavailable right now.")); } }
 }
 async function curveTick(mint) {
-  if (S.tokenMint !== mint) return;
+  if (S.tokenMint !== mint || !whenAwake(() => curveTick(mint))) return;
   try {
     const c = (await readCurves({ connection, web3, mints: [mint] })).get(mint);
     if (c && S.tokenMint === mint) {
@@ -1318,7 +1335,7 @@ async function trackerPass() {
 function startTracker() {
   if (trackerRunning) return;
   trackerRunning = true;
-  const loop = async () => { await trackerPass(); trackerTimer = setTimeout(loop, 20000); };
+  const loop = async () => { if (!whenAwake(loop)) return; await trackerPass(); trackerTimer = setTimeout(loop, 20000); };
   loop();
 }
 function renderTracker() {
@@ -1696,15 +1713,36 @@ document.addEventListener("keydown", e => {
 });
 
 /* ---------- boot ---------- */
-refreshSolPrice(); setInterval(refreshSolPrice, 60000);
+refreshSolPrice(); setInterval(() => awake() && refreshSolPrice(), 60000);
 setTimeout(enrich, 2000);
-renderWatchbar(); refreshWatch(); setInterval(refreshWatch, 30000);
-seedPulse(); setTimeout(curveLoop, 1500); setTimeout(statsLoop, 4000);
-setInterval(() => renderPulse(), 1000);
-setInterval(() => { if (S.route === "token") renderTrades(); }, 5000);
+renderWatchbar(); refreshWatch(); setInterval(() => awake() && refreshWatch(), 30000);
+pp = startPumpPortal(); seedPulse(); setTimeout(curveLoop, 1500); setTimeout(statsLoop, 4000);
+setInterval(() => awake() && renderPulse(), 1000);
+setInterval(() => { if (awake() && S.route === "token") renderTrades(); }, 5000);
 if (tracked().length) startTracker();
 updateAutoChip(); setInterval(autopilot, 4000);
 route();
+// Hidden: the token page's trade stream closes at once, the pump.fun stream after a minute unless a snipe
+// is waiting on a migration. Visible again: both reopen, the board is back-filled from Jupiter, prices
+// refresh and every parked loop restarts.
+let ppIdle = 0;
+function onHidden() {
+  T.sub?.close(); T.sub = null;
+  clearTimeout(ppIdle);
+  ppIdle = setTimeout(() => {
+    if (awake() || !pp || snipes().some(x => x.status === "armed")) return;
+    pp.close(); pp = null; setStatusChip($("pp-status"), "paused", "pump.fun stream");
+  }, 60000);
+}
+if (!awake()) onHidden(); // opened in a background tab
+document.addEventListener("visibilitychange", () => {
+  if (!awake()) return onHidden();
+  clearTimeout(ppIdle);
+  if (!pp) { pp = startPumpPortal(); seedPulse(); }
+  if (S.route === "token" && S.tokenMint && !T.sub) openTradeStream(S.tokenMint);
+  refreshSolPrice(); refreshWatch();
+  const l = [...parked]; parked.clear(); l.forEach(f => f());
+});
 // reconnect silently if a wallet already trusts this site
 for (const w of providers()) { if (w.p.isConnected || w.p.publicKey) { w.p.connect?.({ onlyIfTrusted: true }).then(() => connect(w)).catch(() => {}); break; } }
 window.__gp = { board, settings, S, T }; // handy for debugging from the console

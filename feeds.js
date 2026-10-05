@@ -38,10 +38,14 @@ export function stonkFun({ onTokens, onStatus = () => {}, every = 12000, fetch: 
   let timer = 0, stopped = false;
   const list = status => f(`${STONK_API}/tokens?${new URLSearchParams({ status, sort: "newest", pageSize: "30" })}`)
     .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }).then(b => b?.data?.tokens || []);
+  // a hidden tab doesn't poll: the next pass waits until the page is visible again
+  const hidden = () => typeof document !== "undefined" && document.hidden;
+  const resume = () => { if (hidden()) return; document.removeEventListener("visibilitychange", resume); if (!stopped) pass(); };
   async function pass() {
+    if (hidden()) { onStatus("paused"); return document.addEventListener("visibilitychange", resume); }
     try { onTokens((await Promise.all(["new", "aboutToGraduate", "graduated"].map(list))).flat()); onStatus("live"); }
     catch (_) { onStatus("unreachable"); }
-    if (!stopped) timer = setTimeout(pass, document.hidden ? every * 3 : every);
+    if (!stopped) timer = setTimeout(pass, every);
   }
   pass();
   return { close() { stopped = true; clearTimeout(timer); } };
