@@ -1,0 +1,33 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Ghostprint posts</title>
+<link href="../../videos/source/fonts/fonts.css" rel="stylesheet">
+<style>
+:root{--ground:#D6D8D9;--paper:#EEEFEE;--ink:#1D1F22;--mute:#5F646B;--accent:#FF5A24}
+html,body{margin:0;overflow:hidden;background:var(--ground)}
+#c{position:relative;overflow:hidden;font-family:"Sora",system-ui,sans-serif;color:var(--ink);background:radial-gradient(circle at 70% 55%,#EEEFEE,#D6D8D9 65%)}
+#c svg{display:block;overflow:visible}
+.dots{position:absolute;inset:0;background-image:radial-gradient(rgba(29,31,34,.17) 1.4px,transparent 1.7px);background-size:20px 20px}
+.art{position:absolute}
+.copy{position:absolute;display:flex;flex-direction:column}
+.kicker{display:flex;align-items:center;gap:14px;margin:0 0 30px;font-family:"JetBrains Mono",monospace;font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.kicker svg{height:24px;color:var(--accent)}
+h1{margin:0;font-weight:700;font-size:78px;line-height:1.02;letter-spacing:-.025em}
+.body{margin:30px 0 0;font-size:27px;line-height:1.45;color:var(--mute);max-width:600px}
+.body b{color:var(--ink);font-weight:600}
+.note{margin:28px 0 0;font-family:"JetBrains Mono",monospace;font-size:16px;letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+.note b{color:var(--accent)}
+.foot{position:absolute;display:flex;align-items:center;gap:22px;font-family:"JetBrains Mono",monospace;font-size:17px;letter-spacing:.06em;color:var(--mute)}
+.foot svg{height:22px;color:var(--ink)}
+.foot i{width:1px;height:22px;background:rgba(29,31,34,.25)}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:26px 40px;margin-top:40px}
+.tool{display:flex;gap:18px;align-items:flex-start}
+.tool svg{flex:none;width:34px;height:34px;padding:9px;background:var(--paper);border:2px solid var(--ink);border-radius:6px;box-shadow:4px 4px 0 var(--ink);color:var(--ink)}
+.tool.hot svg{background:var(--accent)}
+.tool h3{margin:2px 0 4px;font-size:23px;font-weight:700;letter-spacing:-.01em}
+.tool p{margin:0;font-size:18px;line-height:1.4;color:var(--mute)}
+.panel{position:absolute;background:var(--accent);overflow:hidden}
+</style></head>
+<body><div id="c"></div>
+<!-- a frozen clock: posts.js steps every drawing to the moment its still is taken at -->
+<script>(() => { const q = []; let T = 0; performance.now = () => T; window.requestAnimationFrame = cb => q.push(cb); window.IntersectionObserver = undefined; window.__step = ms => { T = ms; q.splice(0).forEach(cb => cb(T)); }; })();</script>
+<script type="module" src="posts.js"></script></body></html>
