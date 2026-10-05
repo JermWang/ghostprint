@@ -35,6 +35,7 @@ const usd = n => n == null || !isFinite(n) ? "—" : Math.abs(n) >= 1e9 ? `$${(n
 const pct = n => n == null || !isFinite(n) ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(Math.abs(n) >= 100 ? 0 : 1)}%`;
 const solFmt = n => n == null || !isFinite(n) ? "—" : n >= 100 ? n.toFixed(1) : n >= 1 ? n.toFixed(3) : n.toFixed(4);
 const num = n => n == null || !isFinite(n) ? "—" : n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}K` : n.toFixed(n < 10 ? 2 : 0);
+const count = n => n == null || !isFinite(n) ? "—" : n < 1e3 ? String(Math.round(n)) : num(n); // whole things: holders
 const ago = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : s < 86400 ? `${Math.floor(s / 3600)}h` : `${Math.floor(s / 86400)}d`; };
 const cls = (el, n) => { el.classList.toggle("up", n > 0); el.classList.toggle("down", n < 0); return el; };
 const safeUrl = u => typeof u === "string" && /^https:\/\//.test(u) ? u : null;
@@ -427,6 +428,34 @@ async function enrich() {
   setTimeout(enrich, 3000);
 }
 
+// Holders, top-10 share and dev share only come from Jupiter's token data. Tokens that reached the board
+// another way (the pump.fun stream, live migrations, stonk.fun) get them from a batched Jupiter lookup:
+// visible cards without them are asked for every 20 seconds until Jupiter has indexed them, and the rest
+// refresh every minute. Market cap, volume and liquidity from the token's own source are kept.
+const statsAt = new Map();
+async function statsLoop() {
+  try {
+    if (S.route === "pulse") {
+      const c = board.columns(), now = Date.now();
+      const due = [...c.new, ...c.final, ...c.migrated].filter(t => now - (statsAt.get(t.mint) || 0) > (t.holders == null || t.topHoldersPct == null ? 20_000 : 60_000)).map(t => t.mint).slice(0, 50);
+      if (due.length) {
+        due.forEach(m => statsAt.set(m, now));
+        const list = await jup.search(due.join(","));
+        for (const j of Array.isArray(list) ? list : []) {
+          const cur = board.tokens.get(j.id);
+          if (!cur) continue;
+          tokenInfo.set(j.id, j);
+          const f = fromJupiter(j);
+          board.upsert({ mint: j.id, holders: f.holders, topHoldersPct: f.topHoldersPct, devPct: f.devPct, organicScore: f.organicScore,
+            ...(cur.mcapUsd == null ? { mcapUsd: f.mcapUsd } : {}), ...(cur.volume24h == null ? { volume24h: f.volume24h } : {}), ...(cur.liquidityUsd == null ? { liquidityUsd: f.liquidityUsd } : {}) });
+        }
+        pulseDirty = true;
+      }
+    }
+  } catch (_) {}
+  setTimeout(statsLoop, 8000);
+}
+
 function setStatusChip(el, s, label) {
   el.textContent = ""; const d = make("span", "dot"); d.classList.toggle("live", s === "live"); d.classList.toggle("warn", s !== "live"); el.append(d, `${label}${s === "live" ? "" : ` · ${s}`}`);
 }
@@ -504,7 +533,7 @@ function updateCard(el, t) {
   stats.append(make("span", "mc", mc != null ? usd(mc) : "—"));
   if (t.volume24h) stats.append(stat("bars", usd(t.volume24h), "Volume 24h"));
   else if (t.liquidityUsd) stats.append(stat("drop", usd(t.liquidityUsd), "Liquidity"));
-  if (t.holders) stats.append(stat("users", num(t.holders), "Holders"));
+  if (t.holders) stats.append(stat("users", count(t.holders), "Holders"));
   if (t.topHoldersPct != null) stats.append(stat("crown", `${t.topHoldersPct.toFixed(0)}%`, "Top 10 holders", t.topHoldersPct > 30 ? "warn" : ""));
   if (t.devPct != null) stats.append(stat("dev", `${t.devPct.toFixed(1)}%`, "Dev holds", t.devPct > 5 ? "warn" : ""));
   else if ((t.pump || t.stonk) && t.progress != null && column !== "migrated") stats.append(make("span", `curve${t.progress >= 80 ? " hot" : ""}`, `${t.progress.toFixed(0)}%`));
@@ -560,7 +589,7 @@ async function loadTrending() {
       const qbtd = make("td", "num"), qb = make("button", "qb", `⚡ ${$("qbamt").value || settings.quickBuy}`); qb.type = "button";
       qb.addEventListener("click", e => { e.stopPropagation(); quickBuy(t.id, qb); });
       qbtd.append(qb);
-      tr.append(make("td", "muted", String(i + 1)), tok, make("td", "num", price(t.usdPrice)), chg, make("td", "num", usd((st.buyVolume || 0) + (st.sellVolume || 0))), make("td", "num", usd(t.mcap ?? t.fdv)), make("td", "num", usd(t.liquidity)), make("td", "num", num(t.holderCount)), make("td", "num", t.organicScore != null ? t.organicScore.toFixed(0) : "—"), make("td", "num", age ? ago(Date.now() - age) : "—"), qbtd);
+      tr.append(make("td", "muted", String(i + 1)), tok, make("td", "num", price(t.usdPrice)), chg, make("td", "num", usd((st.buyVolume || 0) + (st.sellVolume || 0))), make("td", "num", usd(t.mcap ?? t.fdv)), make("td", "num", usd(t.liquidity)), make("td", "num", count(t.holderCount)), make("td", "num", t.organicScore != null ? t.organicScore.toFixed(0) : "—"), make("td", "num", age ? ago(Date.now() - age) : "—"), qbtd);
       tr.addEventListener("click", () => { location.hash = `#/token/${t.id}`; });
       table.append(tr);
     });
@@ -753,7 +782,7 @@ function renderAudit() {
   if (dev != null) meter("Dev holds", dev, "", 5);
   if (c) meter("Bonding curve", c.complete ? 100 : c.progress, "", null);
   const row = (k, v, cl) => { const r = make("div", "row"); r.append(make("span", "k", k), make("span", cl || "", v)); a.append(r); };
-  if (t?.holderCount) row("Holders", num(t.holderCount));
+  if (t?.holderCount) row("Holders", count(t.holderCount));
   if (t?.organicScore != null) row("Organic score", `${t.organicScore.toFixed(0)} ${t.organicScoreLabel || ""}`);
   const created = Date.parse(t?.firstPool?.createdAt || "") || b.createdAt;
   if (created) row("Age", ago(Date.now() - created));
@@ -1670,7 +1699,7 @@ document.addEventListener("keydown", e => {
 refreshSolPrice(); setInterval(refreshSolPrice, 60000);
 setTimeout(enrich, 2000);
 renderWatchbar(); refreshWatch(); setInterval(refreshWatch, 30000);
-seedPulse(); setTimeout(curveLoop, 1500);
+seedPulse(); setTimeout(curveLoop, 1500); setTimeout(statsLoop, 4000);
 setInterval(() => renderPulse(), 1000);
 setInterval(() => { if (S.route === "token") renderTrades(); }, 5000);
 if (tracked().length) startTracker();
