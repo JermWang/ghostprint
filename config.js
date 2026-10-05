@@ -32,4 +32,4 @@ export const RPC_URL = "";
 // After deploying worker/ (see worker/README.md), set this to the worker URL, e.g.
 // "https://ghostprint-proxy.<you>.workers.dev". RPC, Jupiter, NEAR Intents, Jito and X then go through
 // the proxy, which holds the keys. Empty = browsers talk to the public endpoints directly.
-export const PROXY_URL = "";
+export const PROXY_URL = "https://ghostprint-production.up.railway.app";
