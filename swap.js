@@ -150,6 +150,15 @@ export async function prepareSwap({ web3, jup, connection, side, mint, amountRaw
   return { tx, quote, fee, lastValidBlockHeight, tip };
 }
 
+// Simulate an unsigned transaction on our RPC before any wallet sees it. Phantom refuses what its own
+// simulation says will fail ("This dApp could be malicious"), so a transaction that can't land never
+// reaches the wallet: the user gets the reason here instead. (Phantom docs: simulate with sigVerify false.)
+export async function preflight(connection, tx) {
+  const sim = await connection.simulateTransaction(tx, { sigVerify: false, commitment: "confirmed" }).catch(() => null);
+  const err = sim && sim.value && sim.value.err;
+  if (err) throw new SwapError(simError({ message: JSON.stringify(err) + " " + (sim.value.logs || []).slice(-3).join(" ") }));
+}
+
 // Send, keep rebroadcasting until confirmed or the blockhash expires.
 // jito: block engine URL to also send through. mevProtect: send only through Jito (after a simulation check).
 export async function sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus = () => {}, interval = 2000, jito = null, mevProtect = false, fetch: f } = {}) {
@@ -157,8 +166,7 @@ export async function sendAndConfirm(connection, signed, lastValidBlockHeight, {
   const viaJito = () => jito ? jitoSend(jito, raw, f) : Promise.reject(new SwapError("Jito isn't configured."));
   let sig;
   if (jito && mevProtect) {
-    const sim = await connection.simulateTransaction(signed, { sigVerify: false, commitment: "confirmed" }).catch(() => null);
-    if (sim && sim.value && sim.value.err) throw new SwapError(simError({ message: JSON.stringify(sim.value.err) + " " + (sim.value.logs || []).slice(-3).join(" ") }));
+    await preflight(connection, signed);
     sig = await viaJito();
   } else {
     sig = await connection.sendRawTransaction(raw, { skipPreflight: false, maxRetries: 0, preflightCommitment: "confirmed" })
@@ -166,20 +174,28 @@ export async function sendAndConfirm(connection, signed, lastValidBlockHeight, {
     if (jito) viaJito().catch(() => {});
   }
   onStatus({ state: "sent", sig });
+  return confirmSent(connection, sig, lastValidBlockHeight, {
+    onStatus, interval,
+    rebroadcast: () => { if (!mevProtect) connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {}); if (jito) viaJito().catch(() => {}); }
+  });
+}
+
+// Wait for a sent signature to confirm, fail or expire. rebroadcast runs between checks.
+export async function confirmSent(connection, sig, lastValidBlockHeight, { onStatus = () => {}, interval = 2000, rebroadcast = () => {} } = {}) {
   for (;;) {
     const { value: [st] } = await connection.getSignatureStatuses([sig]);
-    if (st && st.err) throw new SwapError(`The swap failed on-chain${slippageHint(st.err)}. Nothing but the network fee was spent.`);
+    if (st && st.err) throw new SwapError(`The transaction failed on-chain${slippageHint(st.err)}. Nothing but the network fee was spent.`);
     if (st && (st.confirmationStatus === "confirmed" || st.confirmationStatus === "finalized")) { onStatus({ state: "confirmed", sig }); return sig; }
-    if ((await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new SwapError("The swap didn't land before it expired. Nothing was spent. Try again, or raise priority or the Jito tip.");
+    if ((await connection.getBlockHeight("confirmed")) > lastValidBlockHeight) throw new SwapError("The transaction didn't land before it expired. Nothing was spent. Try again, or raise priority or the Jito tip.");
     await new Promise(r => setTimeout(r, interval));
-    if (!mevProtect) connection.sendRawTransaction(raw, { skipPreflight: true, maxRetries: 0 }).catch(() => {});
-    if (jito) viaJito().catch(() => {});
+    rebroadcast();
   }
 }
 function simError(e) {
   const m = String(e && e.message || e);
-  if (/insufficient (funds|lamports)/i.test(m) || /0x1\b/.test(m)) return "Not enough SOL to cover the trade, the fee and network costs.";
+  if (/InsufficientFundsForRent/.test(m)) return "That amount is below the 0.00089 SOL a new Solana account needs to exist. Send more.";
+  if (/insufficient (funds|lamports)|AccountNotFound/i.test(m) || /0x1\b/.test(m)) return "Not enough SOL to cover this, the fee and network costs.";
   if (/slippage|0x1771|6001/i.test(m)) return "Price moved past your slippage limit. Raise slippage or try again.";
-  return "The network rejected the swap: " + m.slice(0, 140);
+  return "The network would reject this transaction: " + m.slice(0, 140);
 }
 const slippageHint = err => /6001|1771/.test(JSON.stringify(err)) ? " (price moved past your slippage limit)" : "";

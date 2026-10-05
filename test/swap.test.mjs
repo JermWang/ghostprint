@@ -113,3 +113,12 @@ test("Jito tip is appended to the swap and sent through the block engine", async
   const failing = { ...conn, simulateTransaction: async () => ({ value: { err: { InstructionError: [3, { Custom: 6001 }] }, logs: ["slippage exceeded"] } }) };
   await assert.rejects(sendAndConfirm(failing, r.tx, 100, { jito: "x", mevProtect: true, fetch: f }), /slippage/);
 });
+
+test("preflight stops a transaction that would fail before any wallet sees it, with the reason", async () => {
+  const { preflight } = await import("../swap.js");
+  const sim = (err, logs = []) => ({ simulateTransaction: async (tx, opts) => { assert.equal(opts.sigVerify, false); return { value: { err, logs } }; } });
+  await preflight(sim(null), {});
+  await assert.rejects(preflight(sim({ InstructionError: [0, { Custom: 1 }] }, ["Transfer: insufficient lamports 337300000, need 1000000000"]), {}), /Not enough SOL/);
+  await assert.rejects(preflight(sim({ InsufficientFundsForRent: { account_index: 1 } }), {}), /0\.00089 SOL/);
+  await assert.rejects(preflight(sim("AccountNotFound"), {}), /Not enough SOL/);
+});

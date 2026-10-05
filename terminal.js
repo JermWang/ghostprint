@@ -2,7 +2,7 @@
 // sources in the browser (PumpPortal, Jupiter, DexScreener, your Solana RPC, NEAR Intents); every trade is
 // signed by your wallet, or locally by your instant/ghost wallets which are derived from one signature of it.
 import { RPC_URL, TREASURY, FEE_BPS, JUP_BASE, JUP_API_KEY, DEFAULT_SLIPPAGE_BPS, PRIORITY_MAX_LAMPORTS, ONECLICK_JWT, GHOST_CONFIDENTIALITY, GHOST_MAX_SOL, GHOST_GAS_RESERVE, PROXY_URL } from "./config.js";
-import { jupiter, prepareSwap, sendAndConfirm, toRaw, fromRaw, SOL_MINT, SwapError, JITO_URL, JITO_MIN_TIP } from "./swap.js";
+import { jupiter, prepareSwap, sendAndConfirm, preflight, confirmSent, toRaw, fromRaw, SOL_MINT, SwapError, JITO_URL, JITO_MIN_TIP } from "./swap.js";
 import { triggerApi, limitAmounts, signAndExecute, describeOrder, evaluateRule, newRule, ruleTarget } from "./orders.js";
 import { GHOST_MESSAGE, GhostError, deriveGhost, deriveInstant, nextUnusedGhost, scanGhosts, seedFingerprint, oneclick, solAssetId, routeQuote, fundingTx, exitTx, exitAmount, waitForRoute } from "./ghost.js";
 import { trace, DEFAULT_RPC, short, isAddress, base58Encode } from "./trace.js";
@@ -216,11 +216,31 @@ async function signerFor(from) {
   if (!S.wallet && !(await ensureConnected())) throw new SwapError("Connect a wallet first.");
   return { pk: S.wallet.pk, local: null, label: "main" };
 }
-async function signSend(tx, signer, lastValidBlockHeight, onStatus, send = {}) {
-  const signed = signer.local ? (tx.sign([signer.local]), tx) : await S.wallet.p.signTransaction(tx);
-  return sendAndConfirm(connection, signed, lastValidBlockHeight, { onStatus, ...send });
+// The main wallet only ever sees transactions our RPC has already simulated: Phantom blocks what its own
+// simulation says will fail ("This dApp could be malicious"). It then signs and sends itself
+// (signAndSendTransaction, Phantom's recommended method), unless the trade has to go through Jito.
+async function signSend(tx, signer, lastValidBlockHeight, onStatus = () => {}, send = {}) {
+  if (signer.local) { tx.sign([signer.local]); return sendAndConfirm(connection, tx, lastValidBlockHeight, { onStatus, ...send }); }
+  await preflight(connection, tx);
+  const p = S.wallet.p;
+  if (send.jito || !p.signAndSendTransaction) return sendAndConfirm(connection, await p.signTransaction(tx), lastValidBlockHeight, { onStatus, ...send });
+  const { signature } = await p.signAndSendTransaction(tx, { preflightCommitment: "confirmed" });
+  onStatus({ state: "sent", sig: signature });
+  return confirmSent(connection, signature, lastValidBlockHeight, { onStatus });
 }
-const signWith = signer => async tx => signer.local ? (tx.sign([signer.local]), tx) : S.wallet.p.signTransaction(tx);
+// Limit orders: Jupiter submits the signed transaction, so the wallet only signs (after the same check).
+const signWith = signer => async tx => {
+  if (signer.local) { tx.sign([signer.local]); return tx; }
+  await preflight(connection, tx);
+  return S.wallet.p.signTransaction(tx);
+};
+// A plain SOL transfer from the main wallet: enough balance for it plus fees, and at least the rent a new
+// account needs, so nothing reaches the wallet that would fail.
+const RENT_MIN = 890_880n, TRANSFER_RESERVE = 1_000_000n;
+function checkTransfer(a) {
+  if (a < RENT_MIN) throw new SwapError("Send at least 0.00089 SOL: that's the least a new Solana account can hold.");
+  if (S.sol != null && a + TRANSFER_RESERVE > S.sol) throw new SwapError(`Not enough SOL. Your wallet has ${fromRaw(S.sol, 9, 4)} SOL; keep about 0.001 SOL for fees.`);
+}
 
 /* ---------- trades ---------- */
 const TKEY = pk => `ghostprint-trades-${pk}`;
@@ -1553,13 +1573,13 @@ function openWalletModal() {
       const busy = async (fn, btn) => { if (S.busy) return; S.busy = true; btn.disabled = true; try { await fn(m => text(st, m)); } catch (e) { text(st, errMsg(e)); toast(errMsg(e), "err"); } finally { S.busy = false; btn.disabled = false; await refreshBalances(); } };
       const amount = () => { const r2 = toRaw(amtIn.value, 9); if (!r2) throw new SwapError("Enter an amount to deposit."); return r2; };
       dDirect.addEventListener("click", () => busy(async say => {
-        const a = amount(); say("Approve the deposit in your wallet…");
+        const a = amount(); checkTransfer(a); say("Approve the deposit in your wallet…");
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
         const sig = await signSend(fundingTx(web3, { from: S.wallet.pk, depositAddress: S.instant.pk, amount: a, blockhash }), { local: null }, lastValidBlockHeight);
         say("Deposited."); toast(`Deposited ${fromRaw(a, 9, 4)} SOL to your instant wallet.`, "ok", sig);
       }, dDirect));
       dPrivate.addEventListener("click", () => busy(async say => {
-        const a = amount(); say("Getting a private route from NEAR Intents…");
+        const a = amount(); checkTransfer(a); say("Getting a private route from NEAR Intents…");
         const { quote, confidential } = await routeQuote({ oc, asset: await routeAsset(), amount: a, from: S.wallet.pk, to: S.instant.pk, confidentiality: GHOST_CONFIDENTIALITY });
         say("Approve the deposit in your wallet…");
         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
