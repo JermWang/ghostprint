@@ -270,5 +270,26 @@ copyBtn.addEventListener("click", async () => {
   catch (_) { setMeta(["Couldn't reach the clipboard in this view."]); }
 });
 
+/* ---------- token contract address ---------- */
+// TOKEN_CA comes from the proxy server's environment (server.mjs answers /env.js), falling back to ./env.js.
+const ca = $("ca");
+(async () => {
+  let env = {};
+  try { env = await import(PROXY_URL ? `${PROXY_URL.replace(/\/$/, "")}/env.js` : "./env.js"); }
+  catch (_) { try { env = await import("./env.js"); } catch (_) {} }
+  const addr = isAddress(env.TOKEN_CA || "") ? env.TOKEN_CA : "";
+  if (!addr) return;
+  $("ca-v").textContent = addr;
+  ca.disabled = false;
+  ca.setAttribute("aria-label", `Copy contract address ${addr}`);
+  let reset;
+  ca.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(addr); }
+    catch (_) { const t = document.createElement("textarea"); t.value = addr; t.style.cssText = "position:fixed;opacity:0"; document.body.append(t); t.select(); document.execCommand("copy"); t.remove(); }
+    $("ca-go").textContent = "Copied ✓"; ca.classList.add("copied");
+    clearTimeout(reset); reset = setTimeout(() => { $("ca-go").textContent = "Copy"; ca.classList.remove("copied"); }, 1600);
+  });
+})();
+
 /* ---------- boot ---------- */
 ready();

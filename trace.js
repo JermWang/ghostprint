@@ -82,7 +82,12 @@ export function rpcClient(url, { fetch: f = globalThis.fetch.bind(globalThis), c
       }
       if ((res.status === 429 || res.status >= 500) && attempt < retries) { await sleep(backoff * 2 ** attempt); continue; }
       if (res.status === 429) throw new RpcError("The RPC node is rate limiting this browser. Try again in a minute, or use your own RPC URL.", 429);
-      if (!res.ok) throw new RpcError(`The RPC node answered HTTP ${res.status}`, res.status);
+      if (!res.ok) {
+        // say which node refused and why: a proxy's "origin not allowed" reads very differently from a bad key
+        const why = await res.json().then(b => b && (b.error?.message || b.error), () => null).catch(() => null);
+        const host = (() => { try { return ` at ${new URL(url).host}`; } catch (_) { return ""; } })();
+        throw new RpcError(`The RPC node${host} answered HTTP ${res.status}${typeof why === "string" ? `: ${why}` : ""}`, res.status);
+      }
       const body = await res.json();
       if (body.error) {
         if (attempt < retries && /rate|limit|too many/i.test(body.error.message || "")) { await sleep(backoff * 2 ** attempt); continue; }

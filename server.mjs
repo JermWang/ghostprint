@@ -86,12 +86,36 @@ function serveStatic(req, res) {
   req.method === "HEAD" ? res.end() : createReadStream(file).pipe(res);
 }
 
+// /env.js: deploy-time values from this server's environment (see env.js). Any origin may load it, so the
+// Vercel copy of the site reads the same TOKEN_CA. The address stays private until its mint exists on-chain:
+// set TOKEN_CA before launch and the site switches from "Coming soon" to the address by itself once it's live.
+const mintLive = { ca: "", live: false, checkedAt: 0, pending: null };
+async function tokenLive(ca) {
+  if (mintLive.ca !== ca) Object.assign(mintLive, { ca, live: false, checkedAt: 0, pending: null });
+  if (mintLive.live || Date.now() - mintLive.checkedAt < 15000) return mintLive.live;
+  mintLive.pending ??= (async () => {
+    try {
+      const r = await fetch(process.env.RPC_URL || "https://api.mainnet-beta.solana.com", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAccountInfo", params: [ca, { encoding: "base64" }] }), signal: AbortSignal.timeout(4000) });
+      mintLive.live = !!(await r.json()).result?.value;
+    } catch (_) {}
+    mintLive.checkedAt = Date.now(); mintLive.pending = null;
+  })();
+  await mintLive.pending;
+  return mintLive.live;
+}
+async function serveEnv(req, res) {
+  const ca = (process.env.TOKEN_CA || "").trim(), valid = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(ca);
+  const body = `export const TOKEN_CA = ${JSON.stringify(valid && await tokenLive(ca) ? ca : "")};\n`;
+  res.writeHead(200, { "content-type": TYPES[".js"], "cache-control": "no-cache", "access-control-allow-origin": "*", "x-content-type-options": "nosniff" });
+  res.end(req.method === "HEAD" ? undefined : body);
+}
+
 function stat(file) { try { return statSync(file); } catch (_) { return null; } }
 function notFound(res) { res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }); res.end("Not found"); }
 
 const server = http.createServer((req, res) => {
   const { pathname } = new URL(req.url, "http://x");
-  Promise.resolve().then(() => PROXY_PATH.test(pathname) ? proxy(req, res) : serveStatic(req, res)).catch(() => {
+  Promise.resolve().then(() => pathname === "/env.js" ? serveEnv(req, res) : PROXY_PATH.test(pathname) ? proxy(req, res) : serveStatic(req, res)).catch(() => {
     if (!res.headersSent) res.writeHead(502, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: "upstream error" }));
   });

@@ -82,7 +82,8 @@ const DEFAULTS = {
     { slippageBps: 1000, priority: "veryHigh", maxSol: 0.003, tipSol: 0.0005, mev: false },
     { slippageBps: 2000, priority: "veryHigh", maxSol: 0.01, tipSol: 0.001, mev: true }
   ],
-  preset: 0, from: "main", finalStretch: 60, autoTp: 0, autoSl: 0
+  preset: 0, from: "main", finalStretch: 60, autoTp: 0, autoSl: 0,
+  ghost: true // Ghost mode on by default for buys from the main wallet; the trade panel switch saves the choice
 };
 const settings = Object.assign(structuredClone(DEFAULTS), store.get("ghostprint-settings", {}));
 const saveSettings = () => store.set("ghostprint-settings", settings);
@@ -547,7 +548,7 @@ for (const [id, set] of [["tr-cat", v => { trCat = v; }], ["tr-int", v => { trIn
 }
 
 /* ---------- token page ---------- */
-const T = { side: "buy", ghost: false, quoteTimer: 0, quoteSeq: 0, tokenBal: null, trades: [], sub: null, curveTimer: 0, statsTimer: 0 };
+const T = { side: "buy", quoteTimer: 0, quoteSeq: 0, tokenBal: null, trades: [], sub: null, curveTimer: 0, statsTimer: 0 };
 async function openToken(mint) {
   if (S.tokenMint === mint && S.route === "token" && T.sub) return;
   leaveToken();
@@ -756,6 +757,7 @@ document.querySelectorAll("#orders [role=tab]").forEach(t => t.addEventListener(
 
 /* ---------- trade panel ---------- */
 const amt = $("amt");
+const ghostOn = () => !!settings.ghost && T.side === "buy" && settings.from !== "instant";
 function setTradeStatus(msg, kind = "", sig) {
   const st = $("status"); st.textContent = msg; st.className = "status " + kind;
   if (sig) { st.append(" "); st.append(link(solscan("tx", sig), "Solscan ↗")); }
@@ -773,7 +775,6 @@ async function refreshTokenBal() {
 function renderTradePanel() {
   if (!S.tokenMint) return;
   const buy = T.side === "buy", sym = symbolOf(S.tokenMint), inst = settings.from === "instant";
-  if (inst || !buy) T.ghost = false;
   $("side-buy").setAttribute("aria-pressed", buy); $("side-sell").setAttribute("aria-pressed", !buy);
   $("fromseg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.w === settings.from));
   text($("amt-label"), buy ? "Amount (SOL)" : `Amount (${sym})`);
@@ -800,8 +801,8 @@ function renderTradePanel() {
   });
   const gs = $("ghost-switch");
   gs.disabled = inst || !buy;
-  gs.setAttribute("aria-checked", T.ghost);
-  $("ghost-box").classList.toggle("on", T.ghost);
+  gs.setAttribute("aria-checked", ghostOn());
+  $("ghost-box").classList.toggle("on", ghostOn());
   text($("ghost-sub"), inst ? "Instant trades already use a separate wallet" : !buy ? "Ghost positions sell from Portfolio" : "Buy from a fresh wallet via NEAR Intents");
   updateGo();
 }
@@ -813,8 +814,8 @@ function problem() {
   if (T.decimals == null) return "Loading token…";
   const raw = amountRaw();
   if (!raw) return "Enter an amount";
-  if (T.ghost && raw > toRaw(String(GHOST_MAX_SOL), 9)) return `Ghost beta limit is ${GHOST_MAX_SOL} SOL`;
-  if (T.ghost && raw <= GHOST_GAS_RESERVE * 2n) return "Ghost buys start at 0.02 SOL";
+  if (ghostOn() && raw > toRaw(String(GHOST_MAX_SOL), 9)) return `Ghost limit is ${GHOST_MAX_SOL} SOL · switch Ghost off`;
+  if (ghostOn() && raw <= GHOST_GAS_RESERVE * 2n) return "Ghost buys start at 0.02 SOL";
   const inst = settings.from === "instant";
   if (inst && !S.instant) return null; // unlocking happens on click
   if (!inst && !S.wallet) return null;
@@ -828,10 +829,10 @@ function updateGo() {
   const go = $("go"), p = problem(), inst = settings.from === "instant", sym = symbolOf(S.tokenMint);
   const needConnect = !S.wallet;
   go.disabled = !!p && !needConnect;
-  text(go, needConnect ? "Connect wallet" : p || `${T.ghost ? "Ghost buy" : T.side === "buy" ? "Buy" : "Sell"} ${sym}${inst ? " ⚡" : ""}`);
+  text(go, needConnect ? "Connect wallet" : p || `${ghostOn() ? "Ghost buy" : T.side === "buy" ? "Buy" : "Sell"} ${sym}${inst ? " ⚡" : ""}`);
   go.className = `btn go ${needConnect || !p ? (T.side === "buy" ? "buy" : "primary") : ""}`;
   const pr = preset();
-  text($("fine"), T.ghost
+  text($("fine"), ghostOn()
     ? `Ghost: ${FEE_BPS / 100}% fee from your wallet plus the NEAR Intents routing fee, then a fresh ghost wallet buys. Funding and exit amounts and timing can still be matched, so vary them.`
     : `${FEE_BPS / 100}% fee in SOL · P${settings.preset + 1}: ${pr.slippageBps / 100}% slippage, ${pr.priority} priority up to ${pr.maxSol} SOL${pr.tipSol ? ` · Jito tip ${pr.tipSol} SOL${pr.mev ? " (MEV-protected)" : ""}` : ""} · ${inst ? "signed instantly by your instant wallet" : "you approve every trade in your wallet"}`);
 }
@@ -844,7 +845,7 @@ async function previewQuote() {
   const seq = ++T.quoteSeq, raw = amountRaw(), mint = S.tokenMint;
   if (!raw) return;
   const buy = T.side === "buy", fee = buy ? raw * BigInt(FEE_BPS) / 10000n : 0n;
-  const spend = buy ? raw - fee - (T.ghost ? GHOST_GAS_RESERVE : 0n) : raw;
+  const spend = buy ? raw - fee - (ghostOn() ? GHOST_GAS_RESERVE : 0n) : raw;
   if (spend <= 0n) return;
   try {
     const qt = await jup.quote({ inputMint: buy ? SOL_MINT : mint, outputMint: buy ? mint : SOL_MINT, amount: spend, slippageBps: preset().slippageBps });
@@ -856,7 +857,7 @@ function renderQuote(qt, fee) {
   const buy = T.side === "buy", outDec = buy ? T.decimals : 9, outSym = buy ? symbolOf(S.tokenMint) : "SOL";
   const route = [...new Set((qt.routePlan || []).map(r => r.swapInfo?.label).filter(Boolean))].slice(0, 3).join(" → ");
   const rows = [["You get ≈", `${fromRaw(qt.outAmount, outDec, 4)} ${outSym}`], ["Minimum", `${fromRaw(qt.otherAmountThreshold, outDec, 4)} ${outSym}`], ["Price impact", `${(Number(qt.priceImpactPct || 0) * 100).toFixed(2)}%`], ["Route", route || "—"], [`Fee ${FEE_BPS / 100}%`, `${fromRaw(fee, 9, 6)} SOL`]];
-  if (T.ghost) rows.push(["Ghost route", "NEAR Intents → fresh wallet, 0.01 SOL kept for gas"]);
+  if (ghostOn()) rows.push(["Ghost route", "NEAR Intents → fresh wallet, 0.01 SOL kept for gas"]);
   const box = $("quote"); box.textContent = "";
   for (const [k, v] of rows) { const r = make("div", "row"); r.append(make("span", "k", k), make("span", "", v)); box.append(r); }
   box.hidden = false;
@@ -875,11 +876,11 @@ $("bal").addEventListener("click", () => {
   scheduleQuote();
 });
 amt.addEventListener("input", () => { amt.value = amt.value.replace(/,/g, ".").replace(/[^\d.]/g, ""); scheduleQuote(); });
-$("ghost-switch").addEventListener("click", () => { T.ghost = !T.ghost; renderTradePanel(); scheduleQuote(); });
+$("ghost-switch").addEventListener("click", () => { settings.ghost = !settings.ghost; saveSettings(); renderTradePanel(); scheduleQuote(); });
 $("go").addEventListener("click", async () => {
   if (!S.wallet) { await ensureConnected(); return; }
   if (S.busy || problem()) return;
-  if (T.ghost) return ghostBuy();
+  if (ghostOn()) return ghostBuy();
   const go = $("go"), raw = amountRaw(), mint = S.tokenMint, sym = symbolOf(mint), side = T.side;
   S.busy = true; go.disabled = true;
   try {

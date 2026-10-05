@@ -121,6 +121,12 @@ h2{font-size:clamp(1.9rem,4.2vw,3.1rem);line-height:1.04;letter-spacing:-.03em;m
 .feat svg{width:30px;height:30px;display:block}
 .feat h3{margin:0;font-size:1rem}
 .feat p{margin:0;font-size:.88rem;color:var(--mute);line-height:1.5}
+.intents{margin-top:28px;border:1.5px solid var(--ink-3);border-radius:var(--r);padding:clamp(18px,3vw,28px)}
+.intents h3{margin:0 0 16px;font-size:1.1rem;color:var(--paper)}
+.intents ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:18px;counter-reset:i}
+.intents li{counter-increment:i;font-size:.9rem;line-height:1.55;color:var(--mute-ink);min-width:0}
+.intents li::before{content:"0" counter(i);display:block;margin-bottom:8px;font:700 .72rem var(--font-mono);letter-spacing:.12em;color:var(--accent)}
+.intents li b{display:block;margin-bottom:4px;color:var(--paper);font-size:.98rem}
 
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:14px;margin-bottom:26px}
 .step{border:1.5px solid var(--ink);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:8px;background:var(--paper);min-width:0}
@@ -166,6 +172,18 @@ footer .word{height:16px;width:auto;margin-top:14px;display:block}
 
 /* token + steps glyphs */
 .step .gl{width:28px;height:28px;display:block}
+/* contract address: one click anywhere on the bar copies it */
+.ca{display:flex;align-items:center;gap:16px;width:100%;margin:0;padding:14px 14px 14px 20px;background:var(--ink);color:var(--paper);border:1.5px solid var(--ink);border-radius:var(--r);font:500 .9rem var(--font-mono);text-align:left;cursor:pointer;transition:transform .15s,box-shadow .15s}
+.ca:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 0 var(--accent)}
+.ca:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.ca:disabled{cursor:default}
+.ca-k{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--mute-ink);flex:none}
+.ca-v{flex:1;min-width:0;overflow-wrap:anywhere;letter-spacing:.02em}
+.ca:disabled .ca-v{color:var(--mute-ink);letter-spacing:.12em;text-transform:uppercase;font-size:.78rem}
+.ca-go{flex:none;font:600 .84rem var(--font-display);background:var(--accent);color:var(--ink);border-radius:999px;padding:8px 16px}
+.ca:disabled .ca-go{opacity:.35}
+.ca.copied .ca-go{background:var(--paper)}
+@media (max-width:560px){.ca{flex-wrap:wrap;gap:10px}.ca-v{flex-basis:100%;order:3}}
 
 /* signing hours */
 .hours{display:grid;grid-template-columns:repeat(24,minmax(0,1fr));gap:3px;height:118px}
@@ -285,12 +303,21 @@ footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;l
         <div class="feat"><span data-pixel="link"></span><h3>Rebuild anywhere</h3><p>Ghost wallets come from one signature of your wallet. Sign again on any device to get them back. Nothing secret is stored.</p></div>
         <div class="feat"><span data-pixel="fuel"></span><h3>No fee trail</h3><p>The fee comes out of your main wallet when you fund. Ghosts never pay Ghostprint, so nothing on-chain marks them as ours.</p></div>
       </div>
+      <div class="intents">
+        <h3>How Ghost mode uses NEAR Intents</h3>
+        <ol>
+          <li><b>Ask for a route.</b> The terminal asks NEAR Intents' 1Click API to deliver SOL to a brand-new ghost wallet. 1Click answers with a one-time deposit address.</li>
+          <li><b>Fund it once.</b> You sign a single transfer from your wallet into that deposit address. Ghostprint's 0.5% fee rides in the same transaction.</li>
+          <li><b>Solvers pay the ghost.</b> NEAR Intents fills the intent from its own liquidity and pays the ghost wallet. With Confidential Intents, the route's details stay off the public record.</li>
+          <li><b>The ghost buys.</b> Once the SOL lands, the ghost swaps through Jupiter. Exits run the same route in reverse, back to your wallet.</li>
+        </ol>
+      </div>
       <figure class="route-fig">
         <div class="art"><svg data-diagram="ghostRoute" role="img" aria-label="Main wallet sends SOL to a one-time deposit address and the fee to the treasury; NEAR Intents routes it confidentially; the bridge pays a fresh ghost wallet, which swaps on Jupiter"></svg></div>
         <figcaption><b>A ghost buy.</b> Your wallet pays a one-time deposit address. NEAR's bridge pays the ghost. Nothing on-chain runs from you to it.</figcaption>
       </figure>
       <p class="band-note"><a class="btn primary" href="./app.html">Try Ghost mode in the terminal</a> <a class="btn" href="./docs.html#ghost">Read how it works</a></p>
-      <p class="band-note">Ghost mode is a toggle. When you need raw speed, trade normally.</p>
+      <p class="band-note">Ghost mode is on by default in the terminal. Switch it off when you need raw speed.</p>
     </section>
 
     <section id="token">
@@ -307,6 +334,11 @@ footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;l
         <div class="step"><span data-pixel="stack" class="gl"></span><h3>Ghost limits</h3><p>Holders get higher Ghost mode limits per buy than the beta cap.</p></div>
         <div class="step"><span data-pixel="link" class="gl"></span><h3>Referrals</h3><p>Bring traders and earn a cut of their fees, paid in the token.</p></div>
       </div>
+      <button class="ca" id="ca" type="button" disabled aria-label="Contract address coming soon">
+        <span class="ca-k">Contract</span>
+        <span class="ca-v" id="ca-v">Coming soon</span>
+        <span class="ca-go" id="ca-go">Copy</span>
+      </button>
     </section>
 
     <section id="trace">
@@ -366,7 +398,7 @@ footer .small a{color:var(--ink);font-family:var(--font-mono);font-size:.74rem;l
       <p class="big">A wallet should only show what you choose to sign.</p>
       <span data-pixel="word" class="word"></span>
     </div>
-    <p class="small"><a href="./docs.html">Docs</a> · <a href="./app.html">Terminal</a> · <a href="#trace">Exposure</a><br><br>Ghostprint is in beta. The terminal routes swaps through Jupiter and never holds your funds: you sign every trade in your own wallet. Exposure is read-only. Ghost mode is in beta and the token is not live. Nothing here is financial advice or an offer to sell anything.</p>
+    <p class="small"><a href="./docs.html">Docs</a> · <a href="./app.html">Terminal</a> · <a href="#trace">Exposure</a></p>
   </footer>
 </div>
 
